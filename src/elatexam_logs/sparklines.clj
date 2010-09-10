@@ -20,10 +20,11 @@
   (let [image-type (. java.awt.image.BufferedImage TYPE_3BYTE_BGR)]
     (new java.awt.image.BufferedImage width height image-type))))
  
-(defn 
-#^{:doc "Create pixel-accurate sparkline bitmap graphic from {:width :height :values :marker}. :marker=-1 for last entry."}
-      make-sparkline ([{ w :width h :height v :values m :marker }]
-  (let [v       (scale-values v h)
+(defn make-sparkline 
+  "Create pixel-accurate sparkline bitmap graphic from {:width :height :values :marker}. :marker=-1 for last entry."
+   [{w :width, h :height, v :values, m :marker, m-w :marker-width, :or {w 100, h 30, m -1, m-w 2}}]
+  (println m-w)
+   (let [v       (scale-values v h)
         bitmap  (make-buffered-image w h)
         g       (. bitmap (getGraphics))
         m       (if (and m (< m 0)) (+ m (count v)) m)
@@ -42,16 +43,16 @@
             (let [bx  (* m step)
                   by  (- (nth v m) 2)]
               (doto g (.setColor (java.awt.Color/red))
-                      (.fillOval bx by 2 2))))
+                      (.fillOval bx by m-w m-w))))
         (. g (dispose))
-        bitmap))))
+        bitmap)))
  
 (defn show-sparkline
   [values]
   (let [spark (make-sparkline {:width 300 
                                :height 200 
                                :values values
-                               :marker 10})
+                               :marker -1})
           icon  (new javax.swing.ImageIcon spark)]
         (doto (new javax.swing.JFrame "Sparkline")
         (.add (new javax.swing.JLabel icon))
@@ -63,7 +64,8 @@
       test-sparklines []
     (let [spark (make-sparkline {:width 100 :height 30 
                                  :values [1 2 10 8 2 5 8 12 14 3 4 15]
-                                 :marker -1
+                                 :marker 3
+                                 :marker-width 10
                                  })
           icon  (new javax.swing.ImageIcon spark)]
       (doto (new javax.swing.JFrame "Sparkline Test")
@@ -72,3 +74,4 @@
         (.setVisible true)))) 
   
   (test-sparklines))
+
