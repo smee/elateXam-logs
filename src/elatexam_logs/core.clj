@@ -1,25 +1,35 @@
 (ns elatexam-logs.core
-  (:use [clojure.contrib.duck-streams :only (read-lines)]))
+  (:use elatexam-logs.util))
 
-(defn property-name [string]
-  (aget (.split string "=") 0))
+(defn property-name [^String string]
+  (when string
+    (let [[k v] (.split string "=")]
+      (when v k))))
 
-(defn property-value [string]
-  (let [arr (.split string "=")]
-    (if (= 1 (count arr))
-      ""
-	  (aget arr 1))))
+(defn property-value [^String string]
+  (let [[k v] (.split string "=")]
+     v))
+
+(def valid-pnames #{"id" "page" "todo" "save" "hashCode" "submit"})
+
+(defn properties-to-map [lines]
+  (loop [[[line-1 line] & lines] (partition 2 1 lines) res {}]
+    (if (nil? line)
+      res
+      (let [p (property-name line)
+            v (property-value line)
+            p-last (property-name line-1)
+            pname (or p p-last)
+            value (if p v (conj (get res pname) v))]
+        (recur lines (assoc res pname value))))))
 
 (defn parse-log-entry 
   "Create a map with entries :timestamp, :user, :ip 
    as well as entries with textual keys that resemble the log entry contents."
-  [[first-seq second-seq]]
-  (let [[[_ timestamp username ip]] (re-seq #"(.*) INFO .* ([a-z0-9]+)@(.*): .*" (first first-seq))
-	    sane-second-seq (drop-last second-seq)
-        details  (reduce #(assoc %1 (property-name %2) (property-value %2)) 
-                       {} 
-					   sane-second-seq)]
-	(assoc details :user username :timestamp timestamp :ip ip)))
+  [lines]
+  (let [[[_ timestamp username ip]] (re-seq #"(.*) INFO .* ([a-z0-9]+)@(.*): .*" (first lines))
+        details  (properties-to-map lines)]
+    (assoc details :user username :timestamp timestamp :ip ip)))
 
 	
 (def dateformat (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss,SSS"))
@@ -57,10 +67,10 @@ entries for different time units: :seconds, :minutes, :hours, :days"
 that represent each log entry. Mandatory keys are:
 :timestamp, :user, :ip."
   [filename]	
-  (let [lines  (read-lines filename)
-        chunks (partition-by #(re-find #"\d{4}-\d\d-\d\d" %) lines)
-        pairs  (partition 2 chunks)]
-    (map parse-log-entry pairs)))
+  (let [lines   (read-lines filename)
+        chunks  (partition-by #(re-find #"\d{4}-\d\d-\d\d" %) lines)
+        entries (map (partial apply concat) (partition 2 chunks))]
+    (map parse-log-entry entries)))
  
 (defn user-entries 
   "Filter log entries that belong to the same user."
@@ -75,6 +85,7 @@ that represent each log entry. Mandatory keys are:
     time-differences))
 
 (comment
+  (def le (log-entries "input/complexTaskPosts.log"))
   (time-differences (user-entries (log-entries "0902.log") "haferstroh")))
 ;(millis-to-time-units (- (.getTime (java.util.Date.)) (.getTime (java.util.Date. 81 7 19 16 0))))
 
