@@ -1,0 +1,13 @@
+pom.xml
+*.jar
+lib
+classes/
+lib/
+/input
+/ialt_20100903.tar.gz
+/ExamServerRepository_bildungssystemPruef.zip
+.classpath
+.project
+.settings/
+bin/
+/tomcat_ialt.tar
