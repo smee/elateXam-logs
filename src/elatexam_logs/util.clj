@@ -87,3 +87,8 @@ entries for different time units: :seconds, :minutes, :hours, :days"
   "Seq of all files in dir."
   [dir]
   (filter (memfn isFile) (file-seq (java.io.File. dir))))
+
+(defn map-values 
+  "Change all map values by applying f to each one."
+  [f m]
+  (into {} (for [[k v] m] [k (f v)])))

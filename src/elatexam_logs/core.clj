@@ -14,7 +14,7 @@
   (let [[k v] (string/split s #"=")]
      (when v (string/trim-newline v))))
 
-(def valid-pnames #{"id" "page" "todo" "save" "hashCode" "submit" "task"})
+(def valid-pnames #{"id" "page" "todo" "save" "hashCode" "submit" "task" "studentAnnotation" "action" "try"})
 
 (defn properties-to-map [lines]
   (loop [[[line-1 line] & lines] (partition 2 1 lines) res {}]
@@ -56,7 +56,18 @@ that represent each log entry. Mandatory keys are:
                   (sort-by (comp parse-time :timestamp)))]
     (distinct-by #(dissoc % :timestamp) entries)))
  
-(defn users [log-entries]
+(defn save-page? [entry]
+  (not (nil? (:hashCode entry))))
+(defn start-exam? [entry]
+  (= "new" (:todo entry)))
+(defn submit-exam? [entry]
+  (= "Abgeben" (:submit entry)))
+(defn switch-page? [entry]
+  (not-any? (set (keys entry)) [:submit :save :action]))
+
+(defn users 
+  "All unique user names"
+  [log-entries]
   (distinct (map :user log-entries)))
 
 (defn user-entries 
@@ -71,13 +82,63 @@ that represent each log entry. Mandatory keys are:
         time-differences (map #(Math/abs (apply - %)) (partition 2 1 timestamps))]
     time-differences))
 
+(defn add-durations [log-entries]
+  (let [times (concat (list 0) (time-differences log-entries))]
+    (map #(assoc %1 :duration %2) log-entries times)))
+
+(defn time-per-page 
+  "Get editing durations for all pages."
+  [log-entries]
+  (dissoc (->> log-entries
+            add-durations
+            (group-by :page)
+            (map-values #(reduce + (map :duration %))))
+    nil))
+
+(defn exam-duration [log-entries]
+  (reduce + (time-differences log-entries)))
+
+(defn exam-ids [log-entries]
+  (set (map :id log-entries)))
+
+
+(defn editing-stats 
+  "Count number of page saves per user."
+  [entries]
+  (map #(count (filter save-page? %)) (vals (user-entries entries))))
 (comment
   (def le (log-entries "input/complexTaskPosts.log"))
   (nth le 6)
 
-  (def e (apply log-entries (files-in "input")))
+  (def entries (apply log-entries (files-in "input")))
+  (def users (user-entries entries))
+  (count (keys users))
   
-  (map millis-to-string (time-differences (user-entries (log-entries "0902.log") "haferstroh"))))
+  (map millis-to-string (time-differences (user-entries (log-entries "0902.log") "haferstroh")))
+  
+  (use '(incanter core charts stats))
+  ;; show histogram of changing pages
+  (view (histogram (editing-stats entries) 
+          :nbins 100
+          :title "Bearbeitung der Seiten"
+          :x-label "Anzahl Speichervorgänge"
+          :y-label "Anzahl Studenten"))
+  ;; show histogram of exam duration
+  (doto (histogram 
+          (remove #(> % (* 24 60 60 1000)) (map exam-duration (vals (user-entries entries)))) 
+          :nbins 100
+          :title "Bearbeitungsdauer"
+          :x-label "Zeit in msec"
+          :y-label "Anzahl Studenten")
+    view
+    (add-pointer (* 1.5 3600000) 50 :text "90 min" :angle :north)
+    (add-pointer 3600000 50 :text "60 min" :angle :north)
+    (add-pointer (* 0.5 3600000) 50 :text "30 min" :angle :north)
+    (save "d:/bearbeitungszeit.png"))
+  
+  
+  
+  )
 ;(millis-to-time-units (- (.getTime (java.util.Date.)) (.getTime (java.util.Date. 81 7 19 16 0))))
 
 ;test
