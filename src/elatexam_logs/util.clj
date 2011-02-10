@@ -84,9 +84,18 @@ entries for different time units: :seconds, :minutes, :hours, :days"
       (step coll #{})))
 
 (defn files-in 
-  "Seq of all files in dir."
-  [dir]
-  (filter (memfn isFile) (file-seq (java.io.File. dir))))
+  "Seq of all files in dir. Optionally specify regular expression that must match the filename (incl. path)"
+  ([dir] (files-in dir #".*"))
+  ([dir pattern] (filter (memfn isFile)   
+                 (for [file (-> dir java.io.File. file-seq) 
+                       :when (re-matches pattern (.getName file))]
+                   file))))
+
+(defn find-file 
+  "Traverse directory dirpath depth first, return all files matching
+the regular expression pattern"
+  [dir pattern]
+)
 
 (defn map-values 
   "Change all map values by applying f to each one."

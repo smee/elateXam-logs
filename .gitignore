@@ -11,3 +11,4 @@ lib/
 .settings/
 bin/
 /tomcat_ialt.tar
+/target

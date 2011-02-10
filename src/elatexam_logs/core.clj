@@ -110,31 +110,12 @@ that represent each log entry. Mandatory keys are:
   (def le (log-entries "input/complexTaskPosts.log"))
   (nth le 6)
 
-  (def entries (apply log-entries (files-in "input")))
+  (def entries (apply log-entries (files-in "d:/temp/e" #".*complexTaskPosts.log.*")))
   (def users (user-entries entries))
   (count (keys users))
   
   (map millis-to-string (time-differences (user-entries (log-entries "0902.log") "haferstroh")))
   
-  (use '(incanter core charts stats))
-  ;; show histogram of changing pages
-  (view (histogram (editing-stats entries) 
-          :nbins 100
-          :title "Bearbeitung der Seiten"
-          :x-label "Anzahl Speichervorgänge"
-          :y-label "Anzahl Studenten"))
-  ;; show histogram of exam duration
-  (doto (histogram 
-          (remove #(> % (* 24 60 60 1000)) (map exam-duration (vals (user-entries entries)))) 
-          :nbins 100
-          :title "Bearbeitungsdauer"
-          :x-label "Zeit in msec"
-          :y-label "Anzahl Studenten")
-    view
-    (add-pointer (* 1.5 3600000) 50 :text "90 min" :angle :north)
-    (add-pointer 3600000 50 :text "60 min" :angle :north)
-    (add-pointer (* 0.5 3600000) 50 :text "30 min" :angle :north)
-    (save "d:/bearbeitungszeit.png"))
   
   
   
