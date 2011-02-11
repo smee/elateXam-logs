@@ -1,4 +1,4 @@
-(ns elatexam-logs.sparklines)
+(ns elatexam.logs.sparklines)
 ; Sparkline Generator
 ; Copyright (c) Jonathan A Watmough. All Rights Reserved.
 ;

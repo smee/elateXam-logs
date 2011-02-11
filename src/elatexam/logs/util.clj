@@ -1,4 +1,4 @@
-(ns elatexam-logs.util
+(ns elatexam.logs.util
   (:use 
     [clojure.java.io :only (reader)]
     [clojure.contrib.seq :only (indexed)]))
@@ -101,3 +101,22 @@ the regular expression pattern"
   "Change all map values by applying f to each one."
   [f m]
   (into {} (for [[k v] m] [k (f v)])))
+(defn map-keys 
+  "Change all map keys by applying f to each one."
+  [f m]
+  (into {} (for [[k v] m] [(f k) v])))
+
+(defn dissoc-where-v 
+  "Remove all mappings [ k v] where (f v) is logically true."
+  [f m]
+  (into {} (for [[k v] m] (when (not (f v)) [k v]))))
+
+(defn s2f 
+  "Parse float string representation."
+  [s]
+  (Float/parseFloat s))
+
+(defn s2i 
+  "Parse integer string representation."
+  [s]
+  (Integer/parseInt s))

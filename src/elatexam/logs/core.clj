@@ -1,6 +1,6 @@
-(ns elatexam-logs.core
+(ns elatexam.logs.core
   (:use 
-    elatexam-logs.util
+    elatexam.logs.util
     [clojure.contrib.io :only (read-lines)])
   (:require 
     [clojure.string :as string]))
@@ -33,6 +33,9 @@
   (let [lines (->> lines (partition-when (partial starts-with-any valid-pnames)) (map (partial string/join "\n")))]
     (zipmap (map (comp keyword property-name) lines) (map property-value lines))))
 
+(def invalid-users #{"a" "ab" "aberger" "ahlborn" "astudent" "aufsicht" "bojack" "js.test" "reech" "sdienst" "test" "testa" "teststudi" "wolltest" 
+                     "rublack1" "Schminder" "schwendel" "sdienst@informatik.uni-leipzig.de"})
+
 (defn parse-log-entry 
   "Create a map with entries :timestamp, :user, :ip 
    as well as entries with textual keys that resemble the log entry contents."
@@ -53,6 +56,7 @@ that represent each log entry. Mandatory keys are:
                   (partition-when #(re-find #"\d{4}-\d\d-\d\d" %))
                   (pmap parse-log-entry)
                   (remove (comp nil? :ip))
+                  (remove invalid-users)
                   (sort-by (comp parse-time :timestamp)))]
     (distinct-by #(dissoc % :timestamp) entries)))
  
@@ -65,15 +69,30 @@ that represent each log entry. Mandatory keys are:
 (defn switch-page? [entry]
   (not-any? (set (keys entry)) [:submit :save :action]))
 
+
+(defn user [log-entry]
+  (:user log-entry))
+(defn taskid [log-entry]
+  (:id log-entry))
+
 (defn users 
   "All unique user names"
   [log-entries]
-  (distinct (map :user log-entries)))
+  (distinct (map user log-entries)))
 
 (defn user-entries 
   "Group log entries that belong to the same user."
   ([log-entries] (group-by :user  log-entries))
-  ([log-entries user] (filter #(= user (:user %)) log-entries))) 
+  ([log-entries name] (filter #(= name (user %)) log-entries))) 
+
+(defn group-by-id [log-entries]
+  (group-by taskid log-entries))
+
+(defn exams-by-user 
+  "Map of users to map of taskids to seq. of log entries.
+TODO: Identify incomplete exams."
+  [log-entries]
+  (map-values group-by-id (user-entries log-entries)))
 
 (defn time-differences 
   "Return time differences between successive log entries in milliseconds."
@@ -101,16 +120,21 @@ that represent each log entry. Mandatory keys are:
 (defn exam-ids [log-entries]
   (set (map :id log-entries)))
 
-
 (defn editing-stats 
   "Count number of page saves per user."
   [entries]
   (map #(count (filter save-page? %)) (vals (user-entries entries))))
+
+(defn logs-from-dir 
+  "Load all complexTaskPosts.log.* files within the given directory."
+  [dir]
+  (apply log-entries (files-in dir #".*complexTaskPosts.log.*")))
+
 (comment
   (def le (log-entries "input/complexTaskPosts.log"))
   (nth le 6)
 
-  (def entries (apply log-entries (files-in "d:/temp/e" #".*complexTaskPosts.log.*")))
+  (def entries (logs-from-dir "d:/temp/e"))
   (def users (user-entries entries))
   (count (keys users))
   
