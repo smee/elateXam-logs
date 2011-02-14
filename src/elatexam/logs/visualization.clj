@@ -1,6 +1,6 @@
 (ns elatexam.logs.visualization
   (:use [incanter core charts stats]
-    [elatexam.logs.util :only (map-values map-keys)])
+    [elatexam.logs.util :only (map-values map-keys s2i)])
   (:require
     [elatexam.logs.taskdef :as td]
     [elatexam.logs.core :as c]))
@@ -62,17 +62,11 @@
     
     ))
 
-(defn- points [x entry]
-  (let [u  (c/user entry)
-        id (c/taskid entry)]
-    (td/points-of-user x u id)))
-
 (defn duration-vs-points [entries th]
-  (let [user-id-points (td/mean-points-per-user th)
-        user-logs   (c/exams-by-user entries); map of user to map of id to logentries
-        durations    (map-values (partial map-values c/exam-duration) user-logs) ;map of user to map of id to exam duration
-        duration-points (into {} (mapcat  (fn [p durs] (for [[_ d] durs] [d p])) (vals user-id-points) (vals durations)))
-        ]
+  (let [user-id-points  (td/mean-points-per-user th)
+        ;map of user to map of id to exam duration
+        user-id-dur     (c/exams-by-user entries c/exam-duration)
+        duration-points (into {} (map (fn [[[user id] points]] [(get-in user-id-dur [user id]) points]) user-id-points))]
     
     (doto (scatter-plot (keys duration-points) (vals duration-points)
             :title "Zeit vs. erreichte Punkte"
@@ -81,7 +75,7 @@
             :legend true
             :series-label "Punkte pro Prüfungsdauer")      
       (use-relative-time-axis))))
-    ;duration-points))
+
 
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
