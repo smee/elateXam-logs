@@ -1,22 +1,49 @@
 (ns elatexam.logs.core
   (:use 
     elatexam.logs.util
-    [clojure.contrib.io :only (read-lines)])
+    [clojure.contrib.io :only (read-lines reader)])
   (:require 
     [clojure.string :as string]))
 
-(defn property-name [s]
+(defn save-page? [entry]
+  (not (nil? (:hashCode entry))))
+(defn start-exam? [entry]
+  (= "new" (:todo entry)))
+(defn submit-exam? [entry]
+  (= "Abgeben" (:submit entry)))
+(defn switch-page? [entry]
+  (not-any? (set (keys entry)) [:submit :save :action]))
+
+
+(defn user [log-entry]
+  (:user log-entry))
+(defn taskid [log-entry]
+  (:id log-entry))
+(defn timestamp [log-entry]
+  (:timestamp log-entry))
+(defn ip [log-entry]
+  (:ip log-entry))
+
+
+(defn property-name 
+  "Extract name from strings with structure 'name=value'."
+  [s]
   (when s
     (let [[k v] (string/split s #"=")]
       (when v k))))
 
-(defn property-value [s]
+(defn property-value 
+  "Extract value from strings with structure 'name=value'."
+  [s]
   (let [[k v] (string/split s #"=")]
      (when v (string/trim-newline v))))
 
 (def valid-pnames #{"id" "page" "todo" "save" "hashCode" "submit" "task" "studentAnnotation" "action" "try"})
 
-(defn properties-to-map [lines]
+(defn- properties-to-map 
+  "Converts some strings to a hashmap where every key is mapped to its value. Also respects values that
+span several lines."
+  [lines]
   (loop [[[line-1 line] & lines] (partition 2 1 lines) res {}]
     (if (nil? line)
       res
@@ -33,8 +60,13 @@
   (let [lines (->> lines (partition-when (partial starts-with-any valid-pnames)) (map (partial string/join "\n")))]
     (zipmap (map (comp keyword property-name) lines) (map property-value lines))))
 
+;; known test users
 (def invalid-users #{"a" "ab" "aberger" "ahlborn" "astudent" "aufsicht" "bojack" "js.test" "reech" "sdienst" "test" "testa" "teststudi" "wolltest" 
                      "rublack1" "Schminder" "schwendel" "sdienst@informatik.uni-leipzig.de"})
+
+(defn first-line [file]
+  (with-open [rdr (reader file)]
+    (.readLine rdr)))
 
 (defn parse-log-entry 
   "Create a map with entries :timestamp, :user, :ip 
@@ -52,47 +84,56 @@ that represent each log entry. Mandatory keys are:
 :timestamp, :user, :ip."
   [& filenames]	
   (let [entries (->> filenames   
+                  (sort-by first-line)
                   (mapcat read-lines)
                   (partition-when #(re-find #"\d{4}-\d\d-\d\d" %))
                   (pmap parse-log-entry)
                   (remove (comp nil? :ip))
-                  (remove invalid-users)
-                  (sort-by (comp parse-time :timestamp)))]
+                  (remove (comp invalid-users user)))]
     (distinct-by #(dissoc % :timestamp) entries)))
  
-(defn save-page? [entry]
-  (not (nil? (:hashCode entry))))
-(defn start-exam? [entry]
-  (= "new" (:todo entry)))
-(defn submit-exam? [entry]
-  (= "Abgeben" (:submit entry)))
-(defn switch-page? [entry]
-  (not-any? (set (keys entry)) [:submit :save :action]))
 
-
-(defn user [log-entry]
-  (:user log-entry))
-(defn taskid [log-entry]
-  (:id log-entry))
-
-(defn users 
+(defn all-users 
   "All unique user names"
   [log-entries]
   (distinct (map user log-entries)))
 
 (defn user-entries 
   "Group log entries that belong to the same user."
-  ([log-entries] (group-by :user  log-entries))
-  ([log-entries name] (filter #(= name (user %)) log-entries))) 
+  ([log-entries] (group-by user  log-entries))
+  ([log-entries name] (filter #(= name (user %)) log-entries)))
+
 
 (defn group-by-id [log-entries]
   (group-by taskid log-entries))
 
+(defn in-intervall? 
+  "Is x within the numeric interval [start,end]?"
+  [[start end] x]
+  (and (>= x start) (<= x end)))
+
+(defn overlaps? 
+  "Do these numeric intervals overlap?"
+  [[start1 end1 :as i1] [start2 end2 :as i2]]
+  (or (in-intervall? i1 start2) (in-intervall? i1 end2) (in-intervall? i2 start1) (in-intervall? i2 end1)))
+
 (defn exams-by-user 
-  "Map of users to map of taskids to seq. of log entries.
-TODO: Identify incomplete exams."
+  "Map of users to map of taskids to seq. of log entries. Optionally a function may be specified,
+that gets applied to every sequence of logentries individually.
+
+For example: To get a map of users to map of id to exam duration:
+    (exams-by-user entries examduration)"
+  ([log-entries] (map-values group-by-id (user-entries log-entries)))
+  ([log-entries f] (map-values (partial map-values f) (exams-by-user log-entries))))
+
+(defn group-by-runs 
+  "Group all log entries by overlapping time intervals. The keys are vectors of
+[ earliest start time, latest finish time]."
   [log-entries]
-  (map-values group-by-id (user-entries log-entries)))
+  (let [start-end-fn (fn [logs] (list (parse-time (timestamp (first logs))) (parse-time (timestamp (last logs)))))
+        user-id-interval (exams-by-user log-entries start-end-fn)
+        ]
+    ))
 
 (defn time-differences 
   "Return time differences between successive log entries in milliseconds."
@@ -129,6 +170,8 @@ TODO: Identify incomplete exams."
   "Load all complexTaskPosts.log.* files within the given directory."
   [dir]
   (apply log-entries (files-in dir #".*complexTaskPosts.log.*")))
+
+
 
 (comment
   (def le (log-entries "input/complexTaskPosts.log"))

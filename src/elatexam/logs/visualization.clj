@@ -66,20 +66,25 @@
   (let [user-id-points  (td/mean-points-per-user th)
         ;map of user to map of id to exam duration
         user-id-dur     (c/exams-by-user entries c/exam-duration)
-        duration-points (into {} (map (fn [[[user id] points]] [(get-in user-id-dur [user id]) points]) user-id-points))]
+        duration-points (into {} (map (fn [[[user id] points]] [(get-in user-id-dur [user id]) points]) user-id-points))
+        dp (dissoc duration-points nil)
+        x (keys dp)
+        y (vals dp)
+        lm (linear-model y x)]
     
-    (doto (scatter-plot (keys duration-points) (vals duration-points)
+    (doto (scatter-plot x y
             :title "Zeit vs. erreichte Punkte"
             :x-label "Bearbeitungszeit"
             :y-label "Punkte"
             :legend true
             :series-label "Punkte pro Prüfungsdauer")      
-      (use-relative-time-axis))))
+      (use-relative-time-axis)
+      (add-lines x (:fitted lm) :series-label "Trend (OLS Regression)"))))
 
 
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
-  (def x (td/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
-  (duration-vs-points entries x)
-  (save (exam-duration-graph elatexam.logs.core/entries) "d:/bearbeitungszeit.png")
+  (def th (td/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
+  (duration-vs-points entries th)
+  (save (exam-duration-graph entries) "d:/bearbeitungszeit.png")
   )
