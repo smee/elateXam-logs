@@ -1,9 +1,13 @@
 (ns elatexam.logs.visualization
   (:use [incanter core charts stats]
-    [elatexam.logs.util :only (map-values map-keys s2i)])
+    [elatexam.logs.util :only (map-values map-keys s2i time-to-string)])
   (:require
     [elatexam.logs.taskdef :as td]
-    [elatexam.logs.core :as c]))
+    [elatexam.logs.core :as c])
+  (:import
+    [org.jfree.data.gantt Task TaskSeries TaskSeriesCollection]
+    org.jfree.data.time.SimpleTimePeriod
+    java.util.Calendar))
 
 (defn add-domain-marker [chart x label]
   (.addDomainMarker (.getPlot chart) 
@@ -81,6 +85,56 @@
       (use-relative-time-axis)
       (add-lines x (:fitted lm) :series-label "Trend (OLS Regression)"))))
 
+(def ^java.text.SimpleDateFormat dateformat (java.text.SimpleDateFormat. "dd.MM HH:mm"))
+
+(defn semester-of 
+  "String representation of the semester t falls in."
+  [t]
+  (let [cal     (doto (Calendar/getInstance) (.setTimeInMillis t))
+        year    (mod (.get cal Calendar/YEAR) 100)
+        month   (inc (.get cal Calendar/MONTH))
+        ss?     (contains? #{4 5 6 7 8 9} month)
+        n2s     #(if (< % 10) (str "0" %) (str %))
+        spring? #(contains? #{1 2 3} %)]
+    (if ss?
+      (str "SS" (n2s year))
+      (if (spring? month)
+        (str "WS" (n2s (dec year)) "/" (n2s (mod year 100)))
+        (str "WS" (n2s year) "/" (n2s (mod (inc year) 100)))))))
+
+
+;;;;;;;;;;; Show exam groups as gantt chart
+(defn- exam-group-label [start end]
+  (.format dateformat (java.util.Date. start)))
+
+(defn- gantt-dataset [intervals]
+  (let [series (TaskSeries. "Gruppen")
+        interval-groups (group-by (comp semester-of first) intervals)]
+    (doseq [[label intervals] interval-groups]
+      (.add series
+        ;; each semester is one gantt task
+        (let [task (Task. label (SimpleTimePeriod. (ffirst intervals) (last (last intervals))))]
+          ;; add individual exam groups as subtasks to current semester
+          (doseq [[start end] intervals]
+            (.addSubtask task (Task. (exam-group-label start end) (SimpleTimePeriod. start end))))
+          task)))
+    (doto (TaskSeriesCollection.)
+      (.add series))))
+
+(defn exam-groups-gantt 
+  "Show gantt chart of exams."
+  [entries]
+  (let [runs (c/group-by-runs entries)
+        intervals (sort-by first (keys runs))
+        dataset (gantt-dataset intervals)]
+    (org.jfree.chart.ChartFactory/createGanttChart
+      "Prüfungsgruppen"
+      "Start"
+      "Datum"
+      dataset
+      true
+      true
+      false)))
 
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
