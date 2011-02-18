@@ -4,7 +4,9 @@
     [clojure.contrib.io :only (read-lines reader)])
   (:require 
     [clojure.string :as string]
-    [clojure.contrib.str-utils2 :as str2]))
+    [clojure.contrib.str-utils2 :as str2])
+  (:import 
+    java.util.Calendar))
 
 (defn save-page? [entry]
   (not (nil? (:hashCode entry))))
@@ -83,7 +85,6 @@ span several lines."
       (dissoc nil))))
 
 	
-;; log-entries contains a sequence of maps
 (defn log-entries 
   "Read an elatexam complextask logfile. Creates a sequence of maps
 that represent each log entry. Mandatory keys are:
@@ -106,6 +107,8 @@ that represent each log entry. Mandatory keys are:
   [dir]
   (apply log-entries (files-in dir #".*complexTaskPosts.log.*")))
 
+(defn group-entries [fns log-entries]
+  (group-by (apply juxt fns) log-entries))
 
 ;;;;;;;;; Log entry analysis functions ;;;;;;;;;;;;;;;;;;;;
 
@@ -201,6 +204,22 @@ For example: To get a map of users to map of id to exam duration:
     (into {}
       (for [gr groups] 
         [(time-interval (apply concat gr)) gr]))))
+
+
+(defn semester-of 
+  "String representation of the semester t falls in."
+  [^Long t]
+  (let [cal     (doto (Calendar/getInstance) (.setTimeInMillis t))
+        year    (mod (.get cal Calendar/YEAR) 100)
+        month   (inc (.get cal Calendar/MONTH))
+        ss?     (contains? #{4 5 6 7 8 9} month)
+        n2s     #(if (< % 10) (str "0" %) (str %))
+        spring? #(contains? #{1 2 3} %)]
+    (if ss?
+      (str "SS" (n2s year))
+      (if (spring? month)
+        (str "WS" (n2s (dec year)) "/" (n2s (mod year 100)))
+        (str "WS" (n2s year) "/" (n2s (mod (inc year) 100)))))))
 
 
 (comment

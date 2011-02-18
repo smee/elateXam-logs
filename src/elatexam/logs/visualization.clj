@@ -3,11 +3,11 @@
     [elatexam.logs.util :only (map-values map-keys s2i time-to-string)])
   (:require
     [elatexam.logs.taskdef :as td]
-    [elatexam.logs.core :as c])
+    [elatexam.logs.core :as c]
+    [elatexam.logs.xml :as xml])
   (:import
     [org.jfree.data.gantt Task TaskSeries TaskSeriesCollection]
-    org.jfree.data.time.SimpleTimePeriod
-    java.util.Calendar))
+    org.jfree.data.time.SimpleTimePeriod))
 
 (defn add-domain-marker [chart x label]
   (.addDomainMarker (.getPlot chart) 
@@ -85,31 +85,16 @@
       (use-relative-time-axis)
       (add-lines x (:fitted lm) :series-label "Trend (OLS Regression)"))))
 
-(def ^java.text.SimpleDateFormat dateformat (java.text.SimpleDateFormat. "dd.MM HH:mm"))
-
-(defn semester-of 
-  "String representation of the semester t falls in."
-  [t]
-  (let [cal     (doto (Calendar/getInstance) (.setTimeInMillis t))
-        year    (mod (.get cal Calendar/YEAR) 100)
-        month   (inc (.get cal Calendar/MONTH))
-        ss?     (contains? #{4 5 6 7 8 9} month)
-        n2s     #(if (< % 10) (str "0" %) (str %))
-        spring? #(contains? #{1 2 3} %)]
-    (if ss?
-      (str "SS" (n2s year))
-      (if (spring? month)
-        (str "WS" (n2s (dec year)) "/" (n2s (mod year 100)))
-        (str "WS" (n2s year) "/" (n2s (mod (inc year) 100)))))))
 
 
 ;;;;;;;;;;; Show exam groups as gantt chart
+(def ^java.text.SimpleDateFormat dateformat (java.text.SimpleDateFormat. "dd.MM HH:mm"))
 (defn- exam-group-label [start end]
   (.format dateformat (java.util.Date. start)))
 
 (defn- gantt-dataset [intervals]
   (let [series (TaskSeries. "Gruppen")
-        interval-groups (group-by (comp semester-of first) intervals)]
+        interval-groups (group-by (comp c/semester-of first) intervals)]
     (doseq [[label intervals] interval-groups]
       (.add series
         ;; each semester is one gantt task
@@ -138,7 +123,7 @@
 
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
-  (def th (td/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
+  (def th (xml/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
   (duration-vs-points entries th)
   (save (exam-duration-graph entries) "d:/bearbeitungszeit.png")
   )

@@ -1,39 +1,15 @@
 (ns elatexam.logs.taskdef
   (:use 
     [clojure.contrib.zip-filter.xml :only (xml-> xml1-> attr attr=)]
-    [clojure.java.io :only (input-stream)]
-    [elatexam.logs.util :only (dissoc-where-v s2f)])
+    [elatexam.logs.util :only (dissoc-where-v s2f)]
+    [elatexam.logs.xml :only (load-xml where-one-of?)])
     (:require
+      [clojure.zip :as zip]
       [clojure.contrib.zip-filter :as zf]
       [clojure.contrib.zip-filter.xml :as zfx]
-      [clojure.zip :as zip]
-      [clojure.xml :as xml]
-      clojure.walk
       [incanter.stats :as stats]))
 
-(defn- trim-ns 
-  "Remove substring from keyword up to the first occurance of the character :"
-  [kw] 
-  (let [kw-string (name kw)
-        fixed-kw (if (some #{\:} kw-string) (subs kw-string (inc (.indexOf kw-string ":"))) kw-string)]
-    (keyword fixed-kw)))
-(defn- fix [value]
-  (if (keyword? value) (trim-ns value) value))
-
-(defn- remove-xml-namespaces 
-  "Ignore all xml namespace prefixes by removing them recursively from all map keys and values"
-  [m]
-  (let [f (fn [[k v]]  [(fix k) (fix v)])]
-    (clojure.walk/postwalk 
-      (fn [x] (if (map? x) (into {} (map f x)) x)) 
-      m)))
-
-(defn load-xml 
-  "Parse xml, strips all namespaces! Returns a zipper of the xml structure."
-  [file]
-  (zip/xml-zip (remove-xml-namespaces (xml/parse (input-stream file)))))
-  
-
+;;;;;;;;; taskhandling.xml ;;;;;;;;;;;;;;;;;;;;;;;;
 (defn taskdef-ids 
   "All taskDefIds."
   [x]
@@ -57,18 +33,20 @@
         p (map (partial points-of-corrector x) c)]
     (apply assoc {} (interleave c p))))
 
-(defn points-of-user 
-  "All points of a user and a specific taskdef. Returns all manual and automatic points given."
-  [x user taskdef-id]
-  (let [manual (xml-> x :tasklet [(attr= :taskDefId taskdef-id) (attr= :login user)] :manualCorrection (attr :points))
-        auto   (xml-> x :tasklet [(attr= :taskDefId taskdef-id) (attr= :login user)] :autoCorrection (attr :points))] 
-    (map s2f (concat manual auto))))
-
 (defn- points-auto [tasklet]
   (map s2f (xml-> tasklet :autoCorrection (attr :points))))
 
 (defn- points-manual [tasklet]
   (map s2f (xml-> tasklet :manualCorrection (attr :points))))
+
+(defn points-of-user 
+  "All points of a user and a specific taskdef. Returns all manual and automatic points given."
+  [x user taskdef-id]
+  (let [tasklet  (xml1-> x :tasklet [(attr= :taskDefId taskdef-id) (attr= :login user)])
+        manual   (points-manual tasklet)
+        auto     (points-auto tasklet)] 
+    (concat manual auto)))
+
 
 
 (defn mean-points-per-user 
@@ -80,6 +58,42 @@
         points   (map #(stats/mean (concat (points-auto %) (points-manual %))) tasklets)]
     (dissoc-where-v #(Float/isNaN %) (zipmap (map list users ids) points))))
 
+;;;;;;;;;;;;;;;; taskdef xmls ;;;;;;;;;;;;;;;;;;;;;
+
+(defn categories [x]
+  (xml-> x :category))
+
+(defn cat-ids [x]
+  (set (for [cat (categories x)]
+         (xml1-> cat (attr :id)))))
+
+
+(def subtaskdef-types #{ :mcSubTaskDef
+                         :mappingSubTaskDef
+                         :clozeSubTaskDef
+                         :textSubTaskDef
+                         :paintSubTaskDef})
+
+(defn- find-subtaskdefs [x]
+  (xml-> x :category zf/children zf/children (one-of? subtaskdef-types)))
+
+(defn subtaskdefs 
+  "Extract all relevant subtaskdef informations."
+  [x]
+  (for [s (find-subtaskdefs x)]
+      (hash-map 
+        :type (:tag (zip/node s))
+        :id   (attr s :id)
+        :points (xml1-> s zip/leftmost (attr :pointsPerTask))
+        :trash? (Boolean/valueOf (attr s :trash)))))
+
+(defn task-text 
+  "Find the problem text of subtaskdef with given id."
+  [x id]
+  (some 
+    #(xml1-> % [(attr= :id id)] zf/children :problem zfx/text)
+    (find-subtaskdefs x)))
+
 (comment
   
   (def x (load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml "))
@@ -88,6 +102,7 @@
   (points-of-corrector x "allpaed")
   (into {} (filter (fn [[k v]] (when (contains? #{"allpaed" "schulpaed" "vglpaed" "wollersheim"} k) [k v])) (points-per-corrector x)))
 
+  (def td (load-xml "d:/temp/e/ExamServerRepository_bildungssystemPruef/taskdefs/klausur_bergner_21.xml"))
   )
 
     

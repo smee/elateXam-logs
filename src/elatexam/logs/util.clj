@@ -15,9 +15,9 @@
                           (.close rdr))))]
       (read-line (reader f :encoding encoding)))))
 
-(def dateformat (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss,SSS"))
+(def ^java.text.SimpleDateFormat dateformat (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss,SSS"))
 
-(defn parse-time [s]
+(defn parse-time [^String s]
   (.getTime (.parse dateformat s)))
 
 (defn time-to-string [t]
@@ -55,12 +55,26 @@ entries for different time units: :seconds, :minutes, :hours, :days"
   (when pred
     (for [[idx elt] (indexed coll) :when (pred elt)] idx)))
 
-(defn partition-when [pred coll]
-  (let [coll-end (count coll)
-        indices (index-filter pred coll)
-        index-pairs (partition 2 1 [coll-end] indices)
-        coll-vec (vec coll)]
-    (for [[start end] index-pairs] (subvec coll-vec start end))))
+(defn take-to-first
+  "Returns a lazy sequence of successive items from coll up to
+  and including the point at which it (pred item) returns true.
+  pred must be free of side-effects."
+  [pred coll]
+  (lazy-seq
+   (when-let [s (seq coll)]
+       (if-not (pred (first s))
+         (cons (first s) (take-to-first pred (rest s)))
+         (list (first s))))))
+
+(defn partition-when
+  "Applies f to each value in coll, splitting it each time f returns
+   true. Returns a lazy seq of lazy seqs."
+  [f coll]
+  (when-let [s (seq coll)]
+  (lazy-seq
+    (let [run (take-to-first f s)
+          res (drop (count run) s)]
+        (cons run (partition-when f res)))))) 
 
 (defn starts-with-any 
   "Does the string s start with any string within str-set?"
