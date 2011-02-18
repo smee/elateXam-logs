@@ -3,7 +3,8 @@
     elatexam.logs.util
     [clojure.contrib.io :only (read-lines reader)])
   (:require 
-    [clojure.string :as string]))
+    [clojure.string :as string]
+    [clojure.contrib.str-utils2 :as str2]))
 
 (defn save-page? [entry]
   (not (nil? (:hashCode entry))))
@@ -24,6 +25,8 @@
 (defn ip [log-entry]
   (:ip log-entry))
 
+
+;;;;;;;;; Load log files ;;;;;;;;;;;;;;;;;;;;
 
 (defn property-name 
   "Extract name from strings with structure 'name=value'."
@@ -61,7 +64,8 @@ span several lines."
     (zipmap (map (comp keyword property-name) lines) (map property-value lines))))
 
 ;; known test users
-(def invalid-users #{"a" "ab" "aberger" "ahlborn" "astudent" "aufsicht" "bojack" "js.test" "reech" "sdienst" "test" "testa" "teststudi" "wolltest" 
+(def invalid-users #{"a" "ab" "aberger" "ahlborn" "astudent" "aufsicht" "bojack" "gast" "gast1" "js.test" 
+                     "reech" "sdienst" "test" "testa" "test1" "teststudi" "wolltest" 
                      "rublack1" "Schminder" "schwendel" "sdienst@informatik.uni-leipzig.de"})
 
 (defn first-line [file]
@@ -74,7 +78,9 @@ span several lines."
   [lines]
   (let [[[_ timestamp username ip]] (re-seq #"(.*) INFO .* (.+)@(.*): .*" (first lines))
         details  (prop-to-map (next lines))]
-    (assoc details :user username :timestamp timestamp :ip ip)))
+    (-> details
+      (assoc :user username :timestamp timestamp :ip ip)
+      (dissoc nil))))
 
 	
 ;; log-entries contains a sequence of maps
@@ -84,14 +90,25 @@ that represent each log entry. Mandatory keys are:
 :timestamp, :user, :ip."
   [& filenames]	
   (let [entries (->> filenames   
-                  (sort-by first-line)
+                  (sort-by first-line) ;; every logfile's first line starts with a date time
                   (mapcat read-lines)
-                  (partition-when #(re-find #"\d{4}-\d\d-\d\d" %))
+                  (remove #(str2/contains? % "TimeExtensionGlobalAction")) ;; skip time extension entries
+                  (partition-when #(re-find #"\d{4}-\d\d-\d\d .*" %))
                   (pmap parse-log-entry)
-                  (remove (comp nil? :ip))
-                  (remove (comp invalid-users user)))]
+                  (remove (comp invalid-users user))
+                  (map (fn [{ts :timestamp :as le}] (assoc le :timestamp (parse-time ts)))) ;; java.text.Dateformat is not thread safe
+                  )]
     (distinct-by #(dissoc % :timestamp) entries)))
  
+
+(defn logs-from-dir 
+  "Load all complexTaskPosts.log.* files within the given directory."
+  [dir]
+  (apply log-entries (files-in dir #".*complexTaskPosts.log.*")))
+
+
+;;;;;;;;; Log entry analysis functions ;;;;;;;;;;;;;;;;;;;;
+
 
 (defn all-users 
   "All unique user names"
@@ -117,28 +134,16 @@ that represent each log entry. Mandatory keys are:
   [[start1 end1 :as i1] [start2 end2 :as i2]]
   (or (in-intervall? i1 start2) (in-intervall? i1 end2) (in-intervall? i2 start1) (in-intervall? i2 end1)))
 
-(defn exams-by-user 
-  "Map of users to map of taskids to seq. of log entries. Optionally a function may be specified,
-that gets applied to every sequence of logentries individually.
 
-For example: To get a map of users to map of id to exam duration:
-    (exams-by-user entries examduration)"
-  ([log-entries] (map-values group-by-id (user-entries log-entries)))
-  ([log-entries f] (map-values (partial map-values f) (exams-by-user log-entries))))
-
-(defn group-by-runs 
-  "Group all log entries by overlapping time intervals. The keys are vectors of
-[ earliest start time, latest finish time]."
+(defn time-interval 
+  "Seq of start and end time of a seq of log-entries"
   [log-entries]
-  (let [start-end-fn (fn [logs] (list (parse-time (timestamp (first logs))) (parse-time (timestamp (last logs)))))
-        user-id-interval (exams-by-user log-entries start-end-fn)
-        ]
-    ))
+  (list (timestamp (first log-entries)) (timestamp (last log-entries))))
 
 (defn time-differences 
   "Return time differences between successive log entries in milliseconds."
   [log-entries]
-  (let [timestamps       (map (comp parse-time :timestamp) log-entries)
+  (let [timestamps       (map timestamp log-entries)
         time-differences (map #(Math/abs (apply - %)) (partition 2 1 timestamps))]
     time-differences))
 
@@ -166,15 +171,40 @@ For example: To get a map of users to map of id to exam duration:
   [entries]
   (map #(count (filter save-page? %)) (vals (user-entries entries))))
 
-(defn logs-from-dir 
-  "Load all complexTaskPosts.log.* files within the given directory."
-  [dir]
-  (apply log-entries (files-in dir #".*complexTaskPosts.log.*")))
+;;;;; groupings of log entries ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defn exams-by-user 
+  "Map of users to map of taskids to seq. of log entries. Optionally a function may be specified,
+that gets applied to every sequence of logentries individually.
+
+For example: To get a map of users to map of id to exam duration:
+    (exams-by-user entries exam-duration)"
+  ([log-entries] (map-values group-by-id (user-entries log-entries)))
+  ([log-entries f] (map-values (partial map-values f) (exams-by-user log-entries))))
+
+
+
+(defn group-by-runs 
+  "Group all log entries by overlapping time intervals. The keys are vectors of
+[ earliest start time, latest finish time]."
+  [log-entries]
+  (let [log-traces    (vals (group-by #(vector (taskid %) (user %)) log-entries))
+        sorted-traces (sort-by (comp timestamp first) log-traces)
+        intervals     (map time-interval sorted-traces)
+        indices       (index-filter (partial apply (complement overlaps?)) (partition 2 1 intervals))
+        indices-fixed (concat [0] (map inc indices) [(count intervals)])
+        lengths       (map (partial apply #(- %2 %1)) (partition 2 1 indices-fixed))
+        groups        (loop [res (), [l & ls] lengths, tr sorted-traces]
+                        (if (nil? l)
+                          res
+                          (recur (conj res (take l tr)) ls (drop l tr) )))]
+    (into {}
+      (for [gr groups] 
+        [(time-interval (apply concat gr)) gr]))))
 
 
 (comment
-  (def le (log-entries "input/complexTaskPosts.log"))
+  (def le (logs-from-dir "input"))
   (nth le 6)
 
   (def entries (logs-from-dir "d:/temp/e"))
@@ -187,6 +217,14 @@ For example: To get a map of users to map of id to exam duration:
   
   
   )
-;(millis-to-time-units (- (.getTime (java.util.Date.)) (.getTime (java.util.Date. 81 7 19 16 0))))
-
-;test
+(comment
+  
+  (defn- m [u t]
+    {:user u :id 1 :timestamp t})
+  (defn- m2 [u f t]
+    (map (partial m u) (range f t 100)))
+  (let [u1 (m2 "a" 0 1000)
+        u2 (m2 "b" 500 1500)
+        u3 (m2 "c" 2000 3000)]
+    (group-by-runs (concat u1 u2 u3)))
+  )
