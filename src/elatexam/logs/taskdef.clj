@@ -75,7 +75,7 @@
                          :paintSubTaskDef})
 
 (defn- find-subtaskdefs [x]
-  (xml-> x :category zf/children zf/children (one-of? subtaskdef-types)))
+  (xml-> x :category zf/children zf/children (where-one-of? subtaskdef-types)))
 
 (defn subtaskdefs 
   "Extract all relevant subtaskdef informations."
@@ -94,6 +94,25 @@
     #(xml1-> % [(attr= :id id)] zf/children :problem zfx/text)
     (find-subtaskdefs x)))
 
+;;;;;;;;;;;;;; individual tasklet files
+(def subtasklet-types #{:mcSubTask :mappingSubTask :clozeSubTask :textSubTask :paintSubTask} )
+  
+(defn- find-subtasklets [x]
+  (xml-> x :try :page zf/children (where-one-of? subtasklet-types)))
+
+(defn subtasklets 
+  [x]
+    (set
+      (for [s (find-subtasklets x)]
+        (hash-map 
+          :type (:tag (zip/node s))
+          :id   (attr s :refId)
+          :virtualNum (attr s :virtualNum)
+          :page (xml1-> s zip/up (attr :no))
+          :manual-points (xml-> s zf/children :manualCorrection (attr :points))
+          :auto-points (xml-> s zf/children :autoCorrection (attr :points))))))
+
+
 (comment
   
   (def x (load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml "))
@@ -103,6 +122,7 @@
   (into {} (filter (fn [[k v]] (when (contains? #{"allpaed" "schulpaed" "vglpaed" "wollersheim"} k) [k v])) (points-per-corrector x)))
 
   (def td (load-xml "d:/temp/e/ExamServerRepository_bildungssystemPruef/taskdefs/klausur_bergner_21.xml"))
+  (def t (load-xml "input/ExamServerRepository_bildungssystemPruef/home/1013756/complextask_10.xml"))
   )
 
     
