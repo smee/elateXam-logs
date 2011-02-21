@@ -1,7 +1,8 @@
 (ns elatexam.logs.util
   (:use 
     [clojure.java.io :only (reader)]
-    [clojure.contrib.seq :only (indexed)]))
+    [clojure.contrib.seq :only (indexed)]
+    [clojure.contrib.string :only (replace-char)]))
 
 (defn read-lines-enc
   "Like clojure.core/line-seq but opens f with reader. An encoding may be specified, too.
@@ -97,12 +98,15 @@ entries for different time units: :seconds, :minutes, :hours, :days"
                      xs seen)))]
       (step coll #{})))
 
+(defn- fix-path [s]
+  (replace-char \\ \/ s))
+
 (defn files-in 
   "Seq of all files in dir. Optionally specify regular expression that must match the filename (incl. path)"
   ([dir] (files-in dir #".*"))
   ([dir pattern] (filter (memfn isFile)   
                  (for [file (-> dir java.io.File. file-seq) 
-                       :when (re-matches pattern (.getName file))]
+                       :when (re-matches pattern (fix-path (.getName file)))]
                    file))))
 
 (defn find-file 
@@ -134,3 +138,7 @@ the regular expression pattern"
   "Parse integer string representation."
   [s]
   (Integer/parseInt s))
+(defn s2l 
+  "Parse long string representation."
+  [s]
+  (Long/parseLong s))
