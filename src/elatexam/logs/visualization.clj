@@ -1,6 +1,6 @@
 (ns elatexam.logs.visualization
   (:use [incanter core charts stats]
-    [elatexam.logs.util :only (map-values map-keys s2i time-to-string)])
+    [elatexam.logs.util :only (map-values map-keys s2i time-to-string percent)])
   (:require
     [elatexam.logs.taskdef :as td]
     [elatexam.logs.core :as c]
@@ -162,16 +162,20 @@ every group where size>1."
 hardness may be one of :easy, :medium, :hard"
   [taskdef tries hardness]
     (let [students (stats/difficulty-stats taskdef tries)
-        y (map :points students)
         x (map hardness students)
-        lm (linear-model y x)]
+        y (map :points students)
+        lm (linear-model y x)
+        lm-label (str "Trend (OLS Regression)" \newline "erklärt " (percent (:adj-r-square lm)))]
     (doto (scatter-plot x y 
             :title "Zusammenhang Schwierigkeit/Punkte"
             :x-label (str "Anzahl von Fragen mit Schwierigkeit " hardness)
-            :y-label "Erreichte Punkte")
-      (add-lines x (:fitted lm) :series-label "Trend (OLS Regression)")
-      (add-subtitle (str "Korrelation = " (correlation x y)))
-      view)))
+            :y-label "Erreichte Punkte"
+            :legend true
+            :series-label "Punkte")
+      (add-lines x (:fitted lm) :series-label lm-label)
+      (add-subtitle (str "Korrelation = " (percent (correlation x y))))
+      view)
+    #_lm))
 
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))

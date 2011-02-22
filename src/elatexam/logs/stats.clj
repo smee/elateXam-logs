@@ -19,12 +19,12 @@ or the mean of the manual points."
 
 (defn task-difficulty 
   "Calculate map of taskdef ids to mean of points reached in tries."
-  [taskdefs tries]
-  (let [td (cs/project taskdefs [:id :points])]
-    (let [j (map #(cs/join td (:subtasklets %)) tries)
-          exams (map (partial group-by :id) j)
-          questions (apply (partial merge-with concat) exams)]
-      (map-values (comp stats/mean (partial map #(/ (points-of %) (:points %)))) questions))))
+  [subtaskdefs tries]
+  (let [std     (cs/project subtaskdefs [:id :points])
+        joined  (map #(cs/join std (:subtasklets %)) tries)
+        exams   (map (partial group-by :id) joined)
+        questions (apply (partial merge-with concat) exams)]
+    (map-values (comp stats/mean (partial map #(/ (points-of %) (:points %)))) questions)))
 
 (defn- easy? [x]
   (<= 0.8 x))
@@ -51,9 +51,8 @@ or the mean of the manual points."
                     (task-difficulty (:subtaskdefs taskdef))
                     (map-values assess-difficulty))]
     (set (for [{u :user st :subtasklets} tries] 
-                        (let [points (reduce + (map points-reached st))
-                              st-ids (map :id st)] 
-                          (merge 
-                            (hash-map  :user u :points points)
-                            (frequencies (map task2diff st-ids))))))))
+           (let [points (reduce + (map points-reached st))] 
+             (merge 
+               (hash-map  :user u :points points)
+               (frequencies (map (comp task2diff :id) st))))))))
 

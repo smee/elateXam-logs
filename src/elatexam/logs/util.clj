@@ -142,3 +142,6 @@ the regular expression pattern"
   "Parse long string representation."
   [s]
   (Long/parseLong s))
+
+(defn percent [dbl]
+  (.format (java.text.NumberFormat/getPercentInstance) dbl))
