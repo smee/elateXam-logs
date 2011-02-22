@@ -5,7 +5,6 @@
     [elatexam.logs.util]
     [elatexam.logs.xml :only (load-xml where-one-of?)])
     (:require
-      [clojure.set :as cs]
       [clojure.zip :as zip]
       [clojure.contrib.zip-filter :as zf]
       [clojure.contrib.zip-filter.xml :as zfx]
@@ -158,28 +157,7 @@ Keys: id, start-time, random-seed, user, subtasklets."
             :user (.getName (.getParentFile f)) 
             :subtasklets (subtasklets zipper)))))))
   
-;;;;;;;;;;;; composite infos
-
-(defn points-reached 
-  ""
-  [subtasklet]
-  (if-let [ap (:auto-points subtasklet)]
-    ap
-    (when-let [mp (:manual-points subtasklet)] (stats/mean mp))))
   
-(defn task-difficulty 
-  "Calculate map of taskdef ids to mean of points reached in tries."
-  [taskdefs tries]
-  (let [td (cs/project taskdefs [:id :points])]
-    (let [j (map #(cs/join td (:subtasklets %)) tries)
-          exams (map (partial group-by :id) j)
-          questions (apply (partial merge-with concat) exams)]
-      (map-values (comp stats/mean (partial map #(/ (points-reached %) (:points %)))) questions))))
-
-(defn nan? [i]
-  (Double/isNaN i))
-
-
 
 (comment
   

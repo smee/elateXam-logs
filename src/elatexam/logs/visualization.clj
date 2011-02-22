@@ -4,7 +4,8 @@
   (:require
     [elatexam.logs.taskdef :as td]
     [elatexam.logs.core :as c]
-    [elatexam.logs.xml :as xml])
+    [elatexam.logs.xml :as xml]
+    [elatexam.logs.stats :as stats])
   (:import
     [org.jfree.data.gantt Task TaskSeries TaskSeriesCollection]
     org.jfree.data.time.SimpleTimePeriod))
@@ -121,9 +122,68 @@
       true
       false)))
 
+(defn task-difficulty 
+  "Plot bar chart representing the subtask def difficulties."
+  [taskdef tries label]
+  (let [difficulty (stats/task-difficulty (:subtaskdefs taskdef) tries)
+        values (remove stats/nan? (vals difficulty))]
+    (doto (histogram values 
+            :nbins 30
+            :legend true
+            :x-label "Aufgabenschwierigkeit"
+            :y-label "Anzahl"
+            :series-label label
+            :title "Verteilung der Aufgabenschwierigkeit")
+      (add-domain-marker 0.4 "schwer")
+      (add-domain-marker 0.8 "leicht"))))
+
+(defn task-difficulties-groups
+  "Splits tries into individual groups via :random-seed, shows task-difficulty plot for
+every group where size>1."
+  [taskdef tries]
+  (let [gr (vals (group-by :random-seed tries))
+        groups (remove #(= 1 (count %)) gr)]
+    (doseq [g (concat groups (list tries))] 
+      (let [starttime (time-to-string (apply min (map :start-time g)))
+            d         (stats/task-difficulty (:subtaskdefs taskdef) g)
+            clusters  (stats/cluster-difficulties d)
+            counted   (map-values count clusters)
+            diffic    (remove stats/nan? (vals d))
+            label     (str "Leicht: " (counted :easy) \newline
+                        "Mittel: " (counted :medium)\newline
+                        "Schwer: " (counted :hard))]
+
+        (doto (task-difficulty taskdef g starttime)
+          (add-subtitle label)
+          view)))))
+
+(defn difficulty-points-effect 
+  "Show plot of points reached to number of questions of given difficulty.
+hardness may be one of :easy, :medium, :hard"
+  [taskdef tries hardness]
+    (let [students (stats/difficulty-stats taskdef tries)
+        y (map :points students)
+        x (map hardness students)
+        lm (linear-model y x)]
+    (doto (scatter-plot x y 
+            :title "Zusammenhang Schwierigkeit/Punkte"
+            :x-label (str "Anzahl von Fragen mit Schwierigkeit " hardness)
+            :y-label "Erreichte Punkte")
+      (add-lines x (:fitted lm) :series-label "Trend (OLS Regression)")
+      (add-subtitle (str "Korrelation = " (correlation x y)))
+      view)))
+
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
   (def th (xml/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
   (duration-vs-points entries th)
   (save (exam-duration-graph entries) "d:/bearbeitungszeit.png")
+  
+  (def taskdef (td/load-taskdef "input/taskdefs/klausur_bergner_21.xml"))
+  (def tries (td/load-tries "input/home" "12"))
+  (view (task-difficulty taskdef tries "Alle Gruppen"))
+  (task-difficulties-groups taskdef tries)
+  
+
+  
   )
