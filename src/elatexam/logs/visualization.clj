@@ -22,7 +22,7 @@
   (histogram (c/editing-stats entries) 
           :nbins 100
           :title "Bearbeitung der Seiten"
-          :x-label "Anzahl Speichervorgänge"
+          :x-label "Anzahl SpeichervorgÃ¤nge"
           :y-label "Anzahl Studenten"))
 
 (defn- use-relative-time-axis 
@@ -80,7 +80,7 @@
             :x-label "Bearbeitungszeit"
             :y-label "Punkte"
             :legend true
-            :series-label "Punkte pro Prüfungsdauer")      
+            :series-label "Punkte pro PrÃ¼fungsdauer")      
       (use-relative-time-axis)
       (add-lines x (:fitted lm) :series-label "Trend (OLS Regression)"))))
 
@@ -112,7 +112,7 @@
         intervals (sort-by first (keys runs))
         dataset (gantt-dataset intervals)]
     (org.jfree.chart.ChartFactory/createGanttChart
-      "Prüfungsgruppen"
+      "PrÃ¼fungsgruppen"
       "Start"
       "Datum"
       dataset
@@ -172,7 +172,7 @@ hardness may be one of :easy, :medium, :hard"
         x (map hardness students)
         y (map :points students)
         lm (linear-model y x)
-        lm-label (str "Trend (OLS Regression)" \newline "erklärt " (percent (:adj-r-square lm)))]
+        lm-label (str "Trend (OLS Regression)" \newline "erklÃ¤rt " (percent (:adj-r-square lm)))]
     (doto (scatter-plot x y 
             :title "Zusammenhang Schwierigkeit/Punkte"
             :x-label (str "Anzahl von Fragen mit Schwierigkeit " hardness)
@@ -203,13 +203,43 @@ power and difficulty as subtitle."
         (let [pearson (correlation x y)
               spearman (spearmans-rho x y)] 
           [id 
-           (doto (scatter-plot x y :title id :x-label "Punkte in Aufgabe" :y-label "Punkte in Restprüfung")
-             (add-subtitle (str "Trennschärfe: " 
+           (doto (scatter-plot x y :title id :x-label "Punkte in Aufgabe" :y-label "Punkte in RestprÃ¼fung")
+             (add-subtitle (str "TrennschÃ¤rfe: " 
                              (percent pearson) "(Pearson), " 
                              (percent spearman) "(Spearman)" \newline 
                              "Schwierigkeit: " (percent (d id)))))])))))
 
+(defn score-box-plot-chart 
+  "Splits tries into groups of students with the same questions, renders
+a box plot of exam score distributions."
+  [tries]
+  (let [groups (split-groups tries)
+        [g1 & groups] (map #(vals (stats/exam-scores %)) groups)
+        plot (box-plot g1 
+               :legend true 
+               :title "Punkte pro Gruppe" 
+               :y-label "Punkte" 
+               :series-label (format "durchschn. %.2f Punkte" (mean g1)))]
+    (doseq [g groups]
+        (add-box-plot plot g 
+          :series-label (format "durchschn. %.2f Punkte \n Wahrscheinlichkeit Verteilungsgleichheit \n(p-Wert t-test): %.2f" 
+                          (mean g)
+                          (:p-value (t-test g1 :y g)))))
+    plot))
 
+(defn score-histogram-chart 
+  [tries]
+  (let [scores (vals (stats/exam-scores tries))
+        mean (mean scores)
+        sd (sd scores)]
+    (doto (histogram scores :nbins 10
+            :title "Puntkeverteilung"
+            :x-label "Gesamtpunkte"
+            :y-label "HÃ¤ufigkeit")
+      (add-domain-marker mean "Durchschnitt")
+      (add-domain-marker (- mean sd) "-1 sd")
+      (add-domain-marker (+ mean sd) "+1 sd"))))
+  
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
   (def th (xml/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
@@ -221,7 +251,7 @@ power and difficulty as subtitle."
   (def std (taskdef :subtaskdefs))
   
   (view (task-difficulty taskdef tries "Alle Gruppen"))
-  (show-task-difficulties-per-type )
+  (show-task-difficulties-per-type std tries)
   
   (def groups (split-groups tries))
 

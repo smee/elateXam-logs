@@ -1,7 +1,8 @@
 (ns elatexam.logs.stats
   (:use 
     [clojure.set :as cs]
-    elatexam.logs.util)
+    elatexam.logs.util
+    [incanter.core :only ($= sum)])
   (:require 
     [incanter.stats :as stats]))
 
@@ -21,7 +22,7 @@ or the mean of the manual points."
   (/ (points-of std) (:points std)))
 
 (defn sum-all-points [subtasklets]
-  (reduce + (map points-reached subtasklets)))
+  (sum (map points-reached subtasklets)))
 
 
 (defn task-stats 
@@ -76,6 +77,12 @@ d>0.8 is :easy"
 
 ;;;;;;;;;;;;;;;;;; discrimination power (Trennschaerfe) ;;;;;;;;;;;;;;;;;
 
+(defn exam-scores
+  [tries]
+  (into {} 
+    (for [{u :user st :subtasklets} tries]
+      [u (sum-all-points st)])))
+
 (defn discrimination-power-scores 
   "Trennschärfe, correlation of item scores with exam scores without this item."
   [s tries]
@@ -83,9 +90,7 @@ d>0.8 is :easy"
         ;; map of usernames to map of subtask ids to subtasklet
         students-questions (apply merge (map #(hash-map (:user %) (group-by :id (:subtasklets %))) tries))
         ;; map of usernames to exam scores
-        exam-score (into {} 
-                     (for [{u :user st :subtasklets} tries]
-                       [u (sum-all-points st)]))]
+        exam-score (exam-scores tries)]
     
     (into {}
       (for [q question-ids]
@@ -109,3 +114,16 @@ d>0.8 is :easy"
     (map-values (fn [[is es]] (stats/correlation is es)) scores)))
 
 ;;;;;;;;;;;;;;;;;; reliablity ;;;;;;;;;;;;;;;;;
+
+(defn cronbach-alpha
+  "see http://en.wikipedia.org/wiki/Cronbach%27s_alpha"
+  [s tries]
+  (let [exam-scores     (vals (exam-scores tries))
+        item-scores     (map (partial map points-of) (vals (task-stats s tries)))
+        sum-item-var    (sum (map stats/variance item-scores))
+        total-score-var (stats/variance exam-scores)
+        k (count exam-scores)]
+    
+    ($= (k / (k - 1) * (1 - sum-item-var / total-score-var)))
+    ;[(count exam-scores) (count item-scores)]
+    ))
