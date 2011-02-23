@@ -17,21 +17,34 @@ or the mean of the manual points."
     ap
     (when-let [mp (:manual-points subtasklet)] (stats/mean mp))))
 
+(defn task-stats 
+  "Calculate map of subtaskdef ids to seq of subtasklets of students that
+were presented this subtaskdef."
+  [subtaskdefs tries]
+  (let [std-points     (cs/project subtaskdefs [:id :points])
+        joined  (map #(cs/join std-points (:subtasklets %)) tries)
+        exams   (map (partial group-by :id) joined)]
+    (apply (partial merge-with concat) exams)))
+
+(defn points-reached-percent [std]
+  (/ (points-of std) (:points std)))
+
 (defn task-difficulty 
   "Calculate map of taskdef ids to mean of points reached in tries."
   [subtaskdefs tries]
-  (let [std     (cs/project subtaskdefs [:id :points])
-        joined  (map #(cs/join std (:subtasklets %)) tries)
-        exams   (map (partial group-by :id) joined)
-        questions (apply (partial merge-with concat) exams)]
-    (map-values (comp stats/mean (partial map #(/ (points-of %) (:points %)))) questions)))
+  (let [questions       (task-stats subtaskdefs tries)]
+    (map-values (comp stats/mean (partial map points-reached-percent)) questions)))
 
 (defn- easy? [x]
   (<= 0.8 x))
 (defn- hard? [x]
   (>= 0.4 x))
  
-(defn assess-difficulty [x]
+(defn assess-difficulty 
+  "Maps a difficulty to a task difficulty value. 
+d<0.4 is :hard,
+d>0.8 is :easy"
+  [x]
   (cond 
     (easy? x) :easy
     (hard? x) :hard

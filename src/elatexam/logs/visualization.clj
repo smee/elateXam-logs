@@ -16,7 +16,7 @@
       (.setLabel label) 
       (.setPaint java.awt.Color/RED))))
 
-(defn page-edit-graph
+(defn page-edit-graph-chart
   "show histogram of changing pages"
   [entries]
   (histogram (c/editing-stats entries) 
@@ -36,7 +36,7 @@
     (.setDomainAxis plot axis)))
 
 
-(defn show-corrector-points-box 
+(defn show-corrector-points-box-chart 
   "Box plot of all points given by correctors. Expects map of names to seq. of points"
   [c-p-m]
   (when-let [[[n p] & fs] (seq c-p-m)]
@@ -48,10 +48,10 @@
                  :title "Punktevergabe pro Korrektor")]
       (doseq [[n p] fs]
         (add-box-plot plot p :series-label n))
-      (view plot))))
+      plot)))
 
 
-(defn exam-duration-graph
+(defn exam-duration-graph-chart
   "show histogram of exam duration"
   [entries]
   (doto (histogram 
@@ -63,11 +63,9 @@
     (add-domain-marker (* 0.5 3600000) "30min")
     (add-domain-marker (* 1   3600000) "60min")
     (add-domain-marker (* 1.5 3600000) "90min")
-    (use-relative-time-axis)
-    
-    ))
+    (use-relative-time-axis)))
 
-(defn duration-vs-points [entries th]
+(defn duration-vs-points-chart [entries th]
   (let [user-id-points  (td/mean-points-per-user th)
         ;map of user to map of id to exam duration
         user-id-dur     (c/exams-by-user entries c/exam-duration)
@@ -107,7 +105,7 @@
     (doto (TaskSeriesCollection.)
       (.add series))))
 
-(defn exam-groups-gantt 
+(defn exam-groups-gantt-chart 
   "Show gantt chart of exams."
   [entries]
   (let [runs (c/group-by-runs entries)
@@ -122,42 +120,51 @@
       true
       false)))
 
-(defn task-difficulty 
+(defn task-difficulty-chart 
   "Plot bar chart representing the subtask def difficulties."
-  [taskdef tries label]
-  (let [difficulty (stats/task-difficulty (:subtaskdefs taskdef) tries)
+  [subtaskdefs tries series-label]
+  (let [difficulty (stats/task-difficulty subtaskdefs tries)
         values (remove stats/nan? (vals difficulty))]
     (doto (histogram values 
             :nbins 30
             :legend true
             :x-label "Aufgabenschwierigkeit"
             :y-label "Anzahl"
-            :series-label label
+            :series-label series-label
             :title "Verteilung der Aufgabenschwierigkeit")
       (add-domain-marker 0.4 "schwer")
       (add-domain-marker 0.8 "leicht"))))
 
-(defn task-difficulties-groups
-  "Splits tries into individual groups via :random-seed, shows task-difficulty plot for
-every group where size>1."
-  [taskdef tries]
+(defn split-groups 
+  "Splits all tries into separate groups by same random-seed. Returns only groups
+of size >1, that means no individual students. If the exam was run without fixed random-seeds,
+the returned seq will be empty."
+  [tries]
   (let [gr (vals (group-by :random-seed tries))
         groups (remove #(= 1 (count %)) gr)]
-    (doseq [g (concat groups (list tries))] 
-      (let [starttime (time-to-string (apply min (map :start-time g)))
-            d         (stats/task-difficulty (:subtaskdefs taskdef) g)
-            clusters  (stats/cluster-difficulties d)
-            counted   (map-values count clusters)
-            diffic    (remove stats/nan? (vals d))
-            label     (str "Leicht: " (counted :easy) \newline
-                        "Mittel: " (counted :medium)\newline
-                        "Schwer: " (counted :hard))]
+    groups))
 
-        (doto (task-difficulty taskdef g starttime)
-          (add-subtitle label)
-          view)))))
+(defn- difficulties-label [subtaskdefs tries]
+  (let [d         (stats/task-difficulty subtaskdefs tries)
+        clusters  (stats/cluster-difficulties d)
+        counted   (map-values count clusters)]
+    (str "Leicht: " (counted :easy) \newline
+      "Mittel: " (counted :medium)\newline
+      "Schwer: " (counted :hard))))
 
-(defn difficulty-points-effect 
+(defn show-task-difficulties
+  "Splits tries into individual groups via :random-seed, shows task-difficulty plot for
+every group where size>1."
+  ([subtaskdefs tries] 
+    (show-task-difficulties 
+      subtaskdefs tries (time-to-string (apply min (map :start-time tries)))))
+  ([subtaskdefs tries label]
+    (doto (task-difficulty-chart subtaskdefs tries label)
+      (add-subtitle (difficulties-label subtaskdefs tries))
+      (set-x-range 0 1)
+      view)))
+
+(defn show-difficulty-points-effect 
   "Show plot of points reached to number of questions of given difficulty.
 hardness may be one of :easy, :medium, :hard"
   [taskdef tries hardness]
@@ -186,7 +193,10 @@ hardness may be one of :easy, :medium, :hard"
   (def taskdef (td/load-taskdef "input/taskdefs/klausur_bergner_21.xml"))
   (def tries (td/load-tries "input/home" "12"))
   (view (task-difficulty taskdef tries "Alle Gruppen"))
-  (task-difficulties-groups taskdef tries)
+  (let [groups (split-groups tries)]
+    (doseq [g groups] 
+      (show-task-difficulties (:subtaskdefs taskdef) g)))
+  
   
 
   
