@@ -68,6 +68,18 @@
   (set (for [cat (categories x)]
          (xml1-> cat (attr :id)))))
 
+(defvar subtaskdef-ger 
+  {:mcSubTaskDef "Multiple Choice" 
+   :mcSubTask "Multiple Choice" 
+   :mappingSubTaskDef "Zuordnung" 
+   :mappingSubTask "Zuordnung" 
+   :clozeSubTaskDef  "Lückentext"
+   :clozeSubTask  "Lückentext"
+   :textSubTaskDef "Freitext"
+   :textSubTask  "Freitext"
+   :paintSubTaskDef "Zeichnen"
+   :paintSubTask "Zeichnen"}
+  "I18n of subtask types to german names")
 
 (defvar subtaskdef-types 
   #{ :mcSubTaskDef :mappingSubTaskDef :clozeSubTaskDef :textSubTaskDef :paintSubTaskDef}

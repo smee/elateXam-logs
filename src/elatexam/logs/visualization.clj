@@ -167,8 +167,8 @@ every group where size>1."
 (defn show-difficulty-points-effect 
   "Show plot of points reached to number of questions of given difficulty.
 hardness may be one of :easy, :medium, :hard"
-  [taskdef tries hardness]
-    (let [students (stats/difficulty-stats taskdef tries)
+  [subtaskdefs tries hardness]
+    (let [students (stats/difficulty-stats subtaskdefs tries)
         x (map hardness students)
         y (map :points students)
         lm (linear-model y x)
@@ -184,6 +184,32 @@ hardness may be one of :easy, :medium, :hard"
       view)
     #_lm))
 
+(defn show-task-difficulties-per-type
+  "Show one histogram of task difficulites per task type."
+  [subtaskdefs tries]
+  (let [types (group-by :type subtaskdefs)]
+    (doseq [[t stds] types]
+      (show-task-difficulties stds tries (td/subtaskdef-ger t)))))
+
+(defn discrimination-power-charts
+  "Plot item scores vs. adjusted exam scores per subtask. Print discrimination
+power and difficulty as subtitle."
+  [subtaskdefs tries]
+  (let [x (stats/discrimination-power-scores subtaskdefs tries)
+        d (stats/task-difficulty subtaskdefs tries)]
+    
+    (into {}
+      (for [[id [x y]] x]
+        (let [pearson (correlation x y)
+              spearman (spearmans-rho x y)] 
+          [id 
+           (doto (scatter-plot x y :title id :x-label "Punkte in Aufgabe" :y-label "Punkte in Restprüfung")
+             (add-subtitle (str "Trennschärfe: " 
+                             (percent pearson) "(Pearson), " 
+                             (percent spearman) "(Spearman)" \newline 
+                             "Schwierigkeit: " (percent (d id)))))])))))
+
+
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
   (def th (xml/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
@@ -192,12 +218,12 @@ hardness may be one of :easy, :medium, :hard"
   
   (def taskdef (td/load-taskdef "input/taskdefs/klausur_bergner_21.xml"))
   (def tries (td/load-tries "input/home" "12"))
+  (def std (taskdef :subtaskdefs))
+  
   (view (task-difficulty taskdef tries "Alle Gruppen"))
-  (let [groups (split-groups tries)]
-    (doseq [g groups] 
-      (show-task-difficulties (:subtaskdefs taskdef) g)))
+  (show-task-difficulties-per-type )
   
-  
+  (def groups (split-groups tries))
 
   
   )
