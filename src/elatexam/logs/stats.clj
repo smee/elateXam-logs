@@ -4,7 +4,8 @@
     elatexam.logs.util
     [incanter.core :only ($= sum)])
   (:require 
-    [incanter.stats :as stats]))
+    [incanter.stats :as stats]
+    [elatexam.logs.core :as c]))
 
 (defn nan? [i]
   (Double/isNaN i))
@@ -22,7 +23,7 @@ or the mean of the manual points."
   (/ (points-of std) (:points std)))
 
 (defn sum-all-points [subtasklets]
-  (sum (map points-reached subtasklets)))
+  (sum (map points-of subtasklets)))
 
 
 (defn task-stats 
@@ -84,7 +85,7 @@ d>0.8 is :easy"
       [u (sum-all-points st)])))
 
 (defn discrimination-power-scores 
-  "Trennschärfe, correlation of item scores with exam scores without this item."
+  "Trennschï¿½rfe, correlation of item scores with exam scores without this item."
   [s tries]
   (let [question-ids (keys (task-stats s tries)) ;; ids of questions used
         ;; map of usernames to map of subtask ids to subtasklet
@@ -97,7 +98,7 @@ d>0.8 is :easy"
         ;; calculate pairs of item score to (exam score - item score)
         (let [score-pairs (for [student (keys exam-score)]
                             (let [subtasklet (first (get-in students-questions [student q]))
-                                  item-score (points-reached subtasklet)]
+                                  item-score (points-of subtasklet)]
                               [item-score (- (exam-score student) item-score)]))
               item-scores (map first score-pairs)
               exam-scores (map second score-pairs)]
@@ -127,3 +128,19 @@ d>0.8 is :easy"
     ($= (k / (k - 1) * (1 - sum-item-var / total-score-var)))
     ;[(count exam-scores) (count item-scores)]
     ))
+
+
+;;;;;;;;;;; misc
+(defn split-by-time 
+  "TODO: refactor similar function from core"
+  [tries]
+  (let  [tr-sort (sort-by :start-time tries)
+         intervals (map (fn [{s :start-time}] [s (+ s (* 90 60 1000))]) tr-sort)
+         indices (index-filter (partial apply (complement c/overlaps?)) (partition 2 1 intervals))
+         indices-fixed (concat [0] (map inc indices) [(count intervals)])
+         lengths       (map (partial apply #(- %2 %1)) (partition 2 1 indices-fixed))
+         groups        (loop [res (), [l & ls] lengths, tr tr-sort]
+                         (if (nil? l)
+                           res
+                           (recur (conj res (take l tr)) ls (drop l tr) )))]
+    groups))

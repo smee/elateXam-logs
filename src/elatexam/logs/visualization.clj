@@ -1,6 +1,6 @@
 (ns elatexam.logs.visualization
   (:use [incanter core charts stats]
-    [elatexam.logs.util :only (map-values map-keys s2i time-to-string percent)])
+    [elatexam.logs.util :only (map-values map-keys s2i time-to-string time-to-date-string percent index-filter)])
   (:require
     [elatexam.logs.taskdef :as td]
     [elatexam.logs.core :as c]
@@ -212,17 +212,19 @@ power and difficulty as subtitle."
 (defn score-box-plot-chart 
   "Splits tries into groups of students with the same questions, renders
 a box plot of exam score distributions."
-  [tries]
-  (let [groups (split-groups tries)
-        [g1 & groups] (map #(vals (stats/exam-scores %)) groups)
+  [& tries]
+  (let [tries (sort-by (comp :start-time first) tries)
+        starts (map #(time-to-string (apply min (map :start-time %))) tries)
+        [[lbl g1] & groups] (map vector starts (map #(vals (stats/exam-scores %)) tries))  
         plot (box-plot g1 
                :legend true 
                :title "Punkte pro Gruppe" 
                :y-label "Punkte" 
-               :series-label (format "durchschn. %.2f Punkte" (mean g1)))]
-    (doseq [g groups]
+               :series-label (format "%s \ndurchschn. %.2f Punkte" lbl (mean g1)))]
+    (doseq [[lbl g] groups]
         (add-box-plot plot g 
-          :series-label (format "durchschn. %.2f Punkte \n Wahrscheinlichkeit Verteilungsgleichheit \n(p-Wert t-test): %.2f" 
+          :series-label (format "%s \n durchschn. %.2f Punkte \n Wahrscheinlichkeit Verteilungsgleichheit \n(p-Wert t-test): %f" 
+                          lbl
                           (mean g)
                           (:p-value (t-test g1 :y g)))))
     plot))
@@ -239,6 +241,8 @@ a box plot of exam score distributions."
       (add-domain-marker mean "Durchschnitt")
       (add-domain-marker (- mean sd) "-1 sd")
       (add-domain-marker (+ mean sd) "+1 sd"))))
+
+
   
 (comment
   (def entries (c/logs-from-dir "d:/temp/e"))
@@ -256,4 +260,12 @@ a box plot of exam score distributions."
   (def groups (split-groups tries))
 
   
+  )
+
+(comment
+  ;; show score distributions of exam groups for individual days
+  (def g1 (first groups))
+  
+  (def groups-per-day (map (partial group-by #(time-to-date-string (:start-time %))) groups))
+  (map #(view (apply score-box-plot-chart (vals %))) groups-per-day)
   )

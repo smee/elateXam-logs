@@ -17,12 +17,16 @@
       (read-line (reader f :encoding encoding)))))
 
 (def ^java.text.SimpleDateFormat dateformat (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss,SSS"))
+(def ^java.text.SimpleDateFormat dateonlyformat (java.text.SimpleDateFormat. "yyyy-MM-dd"))
 
 (defn parse-time [^String s]
   (.getTime (.parse dateformat s)))
 
 (defn time-to-string [t]
   (.format dateformat (java.util.Date. t)))
+
+(defn time-to-date-string [t]
+  (.format dateonlyformat (java.util.Date. t)))
 
 (defn millis-to-time-units
   "Convert time in milliseconds to a seq that contains
