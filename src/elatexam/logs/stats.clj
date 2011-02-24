@@ -85,7 +85,7 @@ d>0.8 is :easy"
       [u (sum-all-points st)])))
 
 (defn discrimination-power-scores 
-  "Trennsch�rfe, correlation of item scores with exam scores without this item."
+  "Trennschärfe, correlation of item scores with exam scores without this item."
   [s tries]
   (let [question-ids (keys (task-stats s tries)) ;; ids of questions used
         ;; map of usernames to map of subtask ids to subtasklet
@@ -125,10 +125,33 @@ d>0.8 is :easy"
         total-score-var (stats/variance exam-scores)
         k (count exam-scores)]
     
-    ($= (k / (k - 1) * (1 - sum-item-var / total-score-var)))
-    ;[(count exam-scores) (count item-scores)]
-    ))
+    ($= (k / (k - 1) * (1 - sum-item-var / total-score-var)))))
 
+
+(defn- remove-item [id]
+  (fn [{st :subtasklets :as t}]
+    (assoc t :subtasklets (remove #(= id (:id %)) st))))
+
+(defn cronbach-if-deleted
+  "Calculate cronbach's alpha after deleting each item."
+  [s tries]
+  (into {}
+    (for [id (keys (task-stats s tries))]
+      (let [tries-adj (map (remove-item id) tries)]
+        [id (cronbach-alpha s tries-adj)]))))
+
+(defn bad-cronbach?
+  [cr c-i-d]
+  (< cr c-i-d))
+
+(defn find-bad-cronbach 
+  "Find all subtaskdef ids that result in an increased cronbach's alpha
+if deleted."
+  [std tries]
+(let [cid (cronbach-if-deleted std tries)
+      cb (cronbach-alpha std tries)
+      bad-ids (filter (comp (partial bad-cronbach? cb) second) cid)]
+  (into {} bad-ids)))
 
 ;;;;;;;;;;; misc
 (defn split-by-time 
@@ -143,4 +166,13 @@ d>0.8 is :easy"
                          (if (nil? l)
                            res
                            (recur (conj res (take l tr)) ls (drop l tr) )))]
+    groups))
+
+(defn split-by-randomseed 
+  "Splits all tries into separate groups by same random-seed. Returns only groups
+of size >1, that means no individual students. If the exam was run without fixed random-seeds,
+the returned seq will be empty."
+  [tries]
+  (let [gr (vals (group-by :random-seed tries))
+        groups (remove #(= 1 (count %)) gr)]
     groups))

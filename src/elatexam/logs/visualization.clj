@@ -16,6 +16,13 @@
       (.setLabel label) 
       (.setPaint java.awt.Color/RED))))
 
+(defn add-value-marker [chart x label]
+  (.addRangeMarker (.getPlot chart) 
+    (doto (org.jfree.chart.plot.ValueMarker. x) 
+      (.setLabel label) 
+      (.setPaint java.awt.Color/RED))))
+
+
 (defn page-edit-graph-chart
   "show histogram of changing pages"
   [entries]
@@ -135,14 +142,6 @@
       (add-domain-marker 0.4 "schwer")
       (add-domain-marker 0.8 "leicht"))))
 
-(defn split-groups 
-  "Splits all tries into separate groups by same random-seed. Returns only groups
-of size >1, that means no individual students. If the exam was run without fixed random-seeds,
-the returned seq will be empty."
-  [tries]
-  (let [gr (vals (group-by :random-seed tries))
-        groups (remove #(= 1 (count %)) gr)]
-    groups))
 
 (defn- difficulties-label [subtaskdefs tries]
   (let [d         (stats/task-difficulty subtaskdefs tries)
@@ -194,12 +193,13 @@ hardness may be one of :easy, :medium, :hard"
 (defn discrimination-power-charts
   "Plot item scores vs. adjusted exam scores per subtask. Print discrimination
 power and difficulty as subtitle."
-  [subtaskdefs tries]
+  ([subtaskdefs tries] (discrimination-power-charts subtaskdefs tries nil))
+  ([subtaskdefs tries flt]
   (let [x (stats/discrimination-power-scores subtaskdefs tries)
         d (stats/task-difficulty subtaskdefs tries)]
     
     (into {}
-      (for [[id [x y]] x]
+      (for [[id [x y]] x :when (and (flt (flt id)))]
         (let [pearson (correlation x y)
               spearman (spearmans-rho x y)] 
           [id 
@@ -207,7 +207,7 @@ power and difficulty as subtitle."
              (add-subtitle (str "Trennschärfe: " 
                              (percent pearson) "(Pearson), " 
                              (percent spearman) "(Spearman)" \newline 
-                             "Schwierigkeit: " (percent (d id)))))])))))
+                             "Schwierigkeit: " (percent (d id)))))]))))))
 
 (defn score-box-plot-chart 
   "Splits tries into groups of students with the same questions, renders
@@ -220,14 +220,38 @@ a box plot of exam score distributions."
                :legend true 
                :title "Punkte pro Gruppe" 
                :y-label "Punkte" 
-               :series-label (format "%s \ndurchschn. %.2f Punkte" lbl (mean g1)))]
+               :series-label (format "%s \nmean %.2f" lbl (mean g1)))]
     (doseq [[lbl g] groups]
         (add-box-plot plot g 
-          :series-label (format "%s \n durchschn. %.2f Punkte \n Wahrscheinlichkeit Verteilungsgleichheit \n(p-Wert t-test): %f" 
+          :series-label (format "%s \nmean %.2f\n(p-Wert t-test): %f" 
                           lbl
                           (mean g)
-                          (:p-value (t-test g1 :y g)))))
+                          (:p-value (t-test g1 :y g :alternative :greater)))))
     plot))
+
+
+(defn cronbach-histogram-chart 
+  [subtaskdefs tries]
+  (let [cb (stats/cronbach-alpha subtaskdefs tries)
+        c-i-d (stats/cronbach-if-deleted subtaskdefs tries)]
+    (doto (histogram (vals c-i-d) 
+            :title "Cronbach's alpha if deleted"
+            :x-label "Cronbach's alpha"
+            :y-label "Häufigkeit")
+      (add-domain-marker cb "Cronbach's alpha Gesamt")
+      #_(set-x-range 0 1))))
+
+(defn cronbach-bar-chart 
+  [subtaskdefs tries]
+  (let [cb (stats/cronbach-alpha subtaskdefs tries)
+        c-i-d (stats/cronbach-if-deleted subtaskdefs tries)]
+    (doto(bar-chart (keys c-i-d) (vals c-i-d) 
+            :title "Cronbach's alpha if deleted"
+            :x-label "Aufgaben"
+            :y-label "Cronbach's alpha if deleted"
+            :vertical false)
+      (add-value-marker cb "Cronbach's alpha Gesamt")
+      (add-subtitle (format "Cronbach's alpha Gesamt: %.3f" cb)))))
 
 (defn score-histogram-chart 
   [tries]
@@ -257,7 +281,7 @@ a box plot of exam score distributions."
   (view (task-difficulty taskdef tries "Alle Gruppen"))
   (show-task-difficulties-per-type std tries)
   
-  (def groups (split-groups tries))
+  (def groups (stats/split-by-randomseed tries))
 
   
   )
