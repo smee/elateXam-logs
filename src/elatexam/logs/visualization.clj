@@ -199,7 +199,7 @@ power and difficulty as subtitle."
         d (stats/task-difficulty subtaskdefs tries)]
     
     (into {}
-      (for [[id [x y]] x :when (and (flt (flt id)))]
+      (for [[id [x y]] x :when (or flt (flt id))]
         (let [pearson (correlation x y)
               spearman (spearmans-rho x y)] 
           [id 
@@ -273,16 +273,16 @@ a box plot of exam score distributions."
   (def th (xml/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
   (duration-vs-points entries th)
   (save (exam-duration-graph entries) "d:/bearbeitungszeit.png")
+  (view (task-difficulty std tries "Alle Gruppen"))
+  (show-task-difficulties-per-type std tries)
   
   (def taskdef (td/load-taskdef "input/taskdefs/klausur_bergner_21.xml"))
   (def tries (td/load-tries "input/home" "12"))
   (def std (taskdef :subtaskdefs))
   
-  (view (task-difficulty taskdef tries "Alle Gruppen"))
-  (show-task-difficulties-per-type std tries)
   
   (def groups (stats/split-by-randomseed tries))
-
+  (stats/find-bad-cronbach std (first groups))
   
   )
 

@@ -2,6 +2,7 @@
   (:use 
     [clojure.contrib.zip-filter.xml :only (xml-> xml1-> attr attr=)]
     [clojure.contrib.def :only (defvar)]
+    [clojure.java.io :only (file)]
     [elatexam.logs.util]
     [elatexam.logs.xml :only (load-xml where-one-of?)])
     (:require
@@ -59,7 +60,16 @@
         points   (map #(stats/mean (concat (points-auto %) (points-manual %))) tasklets)]
     (dissoc-where-v #(Float/isNaN %) (zipmap (map list users ids) points))))
 
-;;;;;;;;;;;;;;;; taskdef xmls ;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;; system/taskdefs.xml ;;;;;;;;;;;;;;;;;;;;;
+(defn load-taskdef-summaries [filename]
+  (let [x (load-xml filename)
+        tds (xml-> x :taskDef)]
+    (for [t tds]
+      {:title (xml1-> t (attr :title))
+       :id    (xml1-> t (attr :id))
+       :file  (xml1-> t :complexTaskDef (attr :complexTaskFile))})))
+
+;;;;;;;;;;;;;;;; individual taskdef xmls ;;;;;;;;;;;;;;;;;;;;;
 
 (defn categories [x]
   (xml-> x :category))
@@ -73,8 +83,8 @@
    :mcSubTask "Multiple Choice" 
    :mappingSubTaskDef "Zuordnung" 
    :mappingSubTask "Zuordnung" 
-   :clozeSubTaskDef  "Lückentext"
-   :clozeSubTask  "Lückentext"
+   :clozeSubTaskDef  "LÃ¼ckentext"
+   :clozeSubTask  "LÃ¼ckentext"
    :textSubTaskDef "Freitext"
    :textSubTask  "Freitext"
    :paintSubTaskDef "Zeichnen"
@@ -100,7 +110,8 @@
       (hash-map 
         :type (:tag (zip/node s))
         :id   (attr s :id)
-        :points (xml1-> s zip/leftmost (attr :pointsPerTask) s2f)))))
+        :points (xml1-> s zip/leftmost (attr :pointsPerTask) s2f)
+        :text-hash (xml1-> s zf/children :problem zfx/text hash)))))
 
 (defn- max-points 
   "Sum up all reachable points per task block."
@@ -117,10 +128,9 @@
   "Load task definition file."
   [filename]
   (let [x         (load-xml filename)
-        duration      (xml1-> x :config :time zfx/text s2i)
+        duration  (xml1-> x :config :time zfx/text s2i)
         extension (xml1-> x :config zf/children :kindnessExtensionTime zfx/text s2i)]
     (hash-map 
-      :file filename
       :time (* 1000 60 (+ duration extension))
       :title (xml1-> x :title zfx/text)
       :max-points (max-points x)
@@ -182,6 +192,10 @@ Keys: id, start-time, random-seed, user, subtasklets."
 
   (def td (subtaskdefs (load-xml "input/taskdefs/klausur_bergner_21.xml")))
   (def tries (load-tries "input/home" "12"))
+  
+  (def x
+    (for [{f :file :as m} (load-taskdef-summaries "input/system/taskdefs.xml")]
+      (merge m (load-taskdef (file "input/taskdefs" f)))))
   )
 
     

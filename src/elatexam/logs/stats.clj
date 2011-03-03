@@ -2,22 +2,27 @@
   (:use 
     [clojure.set :as cs]
     elatexam.logs.util
-    [incanter.core :only ($= sum)])
+    [incanter.core :only ($=)])
   (:require 
     [incanter.stats :as stats]
     [elatexam.logs.core :as c]))
 
 (defn nan? [i]
   (Double/isNaN i))
+(defn sum [coll]
+  (reduce + coll))
 
 ;;;;;;; individual subtaskdef difficulty ;;;;;;;;;;;;;;;;;;;;;;;;
 (defn points-of 
   "Calculate the final score of a subtasklet. Uses either the auto
 or the mean of the manual points."
   [subtasklet]
-  (if-let [ap (:auto-points subtasklet)]
-    ap
-    (when-let [mp (:manual-points subtasklet)] (stats/mean mp))))
+  (let [ap (:auto-points subtasklet)
+        mp (:manual-points subtasklet)]
+    (cond 
+      ap ap
+      (not-empty mp) (/ (sum mp) (count mp))
+        :else Double/NaN)))
 
 (defn points-reached-percent [std]
   (/ (points-of std) (:points std)))
