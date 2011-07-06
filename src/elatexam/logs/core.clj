@@ -94,10 +94,12 @@ that represent each log entry. Mandatory keys are:
                   (sort-by first-line) ;; every logfile's first line starts with a date time
                   (mapcat read-lines)
                   (remove #(str2/contains? % "TimeExtensionGlobalAction")) ;; skip time extension entries
-                  (partition-when #(re-find #"\d{4}-\d\d-\d\d .*" %))
+                  (partition-by #(re-find #"\d{4}-\d\d-\d\d .*" %))
+                  (partition 2)
+                  (map (partial apply concat))
                   (pmap parse-log-entry)
                   (remove (comp invalid-users user))
-                  (map (fn [{ts :timestamp :as le}] (assoc le :timestamp (parse-time ts)))) ;; java.text.Dateformat is not thread safe
+                  (map #(update-in % [:timestamp] parse-time)) ;; java.text.Dateformat is not thread safe
                   )]
     (distinct-by #(dissoc % :timestamp) entries)))
  
