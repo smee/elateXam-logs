@@ -1,14 +1,16 @@
 (ns elatexam.logs.taskdef
   (:use 
-    [clojure.contrib.zip-filter.xml :only (xml-> xml1-> attr attr=)]
-    [clojure.contrib.def :only (defvar)]
+    [clojure.data.zip.xml :only (xml-> xml1-> attr attr=)]
     [clojure.java.io :only (file)]
-    [elatexam.logs.util]
+    [org.clojars.smee 
+     [file :only (find-files)]
+     [map :only (dissoc-where-v)]
+     [util :only (s2i s2f s2l)]]
     [elatexam.logs.xml :only (load-xml where-one-of?)])
     (:require
       [clojure.zip :as zip]
-      [clojure.contrib.zip-filter :as zf]
-      [clojure.contrib.zip-filter.xml :as zfx]
+      [clojure.data.zip :as zf]
+      [clojure.data.zip.xml :as zfx]
       [incanter.stats :as stats]))
 
 ;;;;;;;;; taskhandling.xml ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -78,7 +80,7 @@
   (set (for [cat (categories x)]
          (xml1-> cat (attr :id)))))
 
-(defvar subtaskdef-ger 
+(def ^{:doc "I18n of subtask types to german names"} subtaskdef-ger 
   {:mcSubTaskDef "Multiple Choice" 
    :mcSubTask "Multiple Choice" 
    :mappingSubTaskDef "Zuordnung" 
@@ -89,15 +91,13 @@
    :textSubTask  "Freitext"
    :paintSubTaskDef "Zeichnen"
    :paintSubTask "Zeichnen"}
-  "I18n of subtask types to german names")
+  )
 
-(defvar subtaskdef-types 
-  #{ :mcSubTaskDef :mappingSubTaskDef :clozeSubTaskDef :textSubTaskDef :paintSubTaskDef}
-  "Tag names of subtask definitions.")
+(def ^{:doc "Tag names of subtask definitions."} subtaskdef-types 
+  #{ :mcSubTaskDef :mappingSubTaskDef :clozeSubTaskDef :textSubTaskDef :paintSubTaskDef})
 
-(defvar taskblock-types 
-  #{:mcTaskBlock :mappingTaskBlock :clozeTaskBlock :textTaskBlock :paintTaskBlock}
-  "Tag names of task block types.")
+(def ^{:doc "Tag names of task block types."} taskblock-types 
+  #{:mcTaskBlock :mappingTaskBlock :clozeTaskBlock :textTaskBlock :paintTaskBlock})
 
 (defn- find-subtaskdefs [x]
   (xml-> x :category zf/children zf/children (where-one-of? subtaskdef-types)))
@@ -144,9 +144,8 @@
     (find-subtaskdefs x)))
 
 ;;;;;;;;;;;;;; individual tasklet files
-(defvar subtasklet-types 
-  #{:mcSubTask :mappingSubTask :clozeSubTask :textSubTask :paintSubTask} 
-  "Valid tag names of subtasklets.")
+(def ^{:doc "Valid tag names of subtasklets."} subtasklet-types 
+  #{:mcSubTask :mappingSubTask :clozeSubTask :textSubTask :paintSubTask})
   
 (defn- find-subtasklets [x]
   (xml-> x :try :page zf/children (where-one-of? subtasklet-types)))
@@ -169,7 +168,7 @@ Keys: id, start-time, random-seed, user, subtasklets."
   ([dir] (load-tries dir "[0-9]+")) 
   ([dir id] 
     (let [regex (re-pattern (str "complextask_(" id ").xml"))] 
-      (for [f (files-in dir regex) :when (< 0 (.length f))]
+      (for [f (find-files dir regex) :when (< 0 (.length f))]
         (let [[_ id] (re-matches regex (.getName f))
               zipper (load-xml f)]
           (hash-map 

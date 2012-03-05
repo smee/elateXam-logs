@@ -1,10 +1,14 @@
 (ns elatexam.logs.core
   (:use 
-    elatexam.logs.util
-    [clojure.contrib.io :only (read-lines reader)])
+    [clojure.java.io :only (reader)]
+    [org.clojars.smee 
+     [file :only (find-files)]
+     [map :only (map-values)]
+     [seq :only (partition-when distinct-by)]
+     [time :only (parse-time)]
+     [util :only (starts-with-any)]])
   (:require 
-    [clojure.string :as string]
-    [clojure.contrib.str-utils2 :as str2])
+    [clojure.string :as string])
   (:import 
     java.util.Calendar))
 
@@ -92,22 +96,25 @@ that represent each log entry. Mandatory keys are:
   [& filenames]	
   (let [entries (->> filenames   
                   (sort-by first-line) ;; every logfile's first line starts with a date time
-                  (mapcat read-lines)
-                  (remove #(str2/contains? % "TimeExtensionGlobalAction")) ;; skip time extension entries
-                  (partition-by #(re-find #"\d{4}-\d\d-\d\d .*" %))
+                  (mapcat (comp line-seq reader))
+                  (remove (fn [^String line] (.contains line "TimeExtensionGlobalAction"))) ;; skip time extension entries
+                  (remove (fn [^String line] (.contains line "IncreaseTimeExtensionAction"))) ;; skip time extension entries
+                  (partition-by #(re-find #"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3}.*" %))
                   (partition 2)
                   (map (partial apply concat))
                   (pmap parse-log-entry)
                   (remove (comp invalid-users user))
                   (map #(update-in % [:timestamp] parse-time)) ;; java.text.Dateformat is not thread safe
                   )]
-    (distinct-by #(dissoc % :timestamp) entries)))
+    ;(distinct-by #(dissoc % :timestamp) entries)
+    entries
+    ))
  
 
 (defn logs-from-dir 
   "Load all complexTaskPosts.log.* files within the given directory."
   [dir]
-  (apply log-entries (files-in dir #".*complexTaskPosts.log.*")))
+  (apply log-entries (find-files dir #".*complexTaskPosts.log.*")))
 
 (defn group-entries [fns log-entries]
   (group-by (apply juxt fns) log-entries))
@@ -196,7 +203,7 @@ For example: To get a map of users to map of id to exam duration:
   (let [log-traces    (vals (group-by #(vector (taskid %) (user %)) log-entries))
         sorted-traces (sort-by (comp timestamp first) log-traces)
         intervals     (map time-interval sorted-traces)
-        indices       (index-filter (partial apply (complement overlaps?)) (partition 2 1 intervals))
+        indices       (keep-indexed #(when (not (overlaps? %2 %3)) %1) (partition 2 1 intervals)) 
         indices-fixed (concat [0] (map inc indices) [(count intervals)])
         lengths       (map (partial apply #(- %2 %1)) (partition 2 1 indices-fixed))
         groups        (loop [res (), [l & ls] lengths, tr sorted-traces]

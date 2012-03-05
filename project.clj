@@ -1,6 +1,16 @@
 (defproject elatexam-logs "1.0.0-SNAPSHOT"
   :description "FIXME: write"
-  :dev-dependencies [[vimclojure/server "2.3.0-SNAPSHOT"]] 
-  :dependencies [[org.clojure/clojure "1.2.0"]
-                 [org.clojure/clojure-contrib "1.2.0"]
-                 [incanter "1.2.3"]])
+  :dependencies [[org.clojure/clojure "1.3.0"]
+                 [org.clojure/data.zip "0.1.0"]
+                 [org.clojars.smee/common "1.2.0-SNAPSHOT"]
+                 [org.clojars.smee/archive "0.2.0-SNAPSHOT"]
+                 [chart-utils "1.0.0-SNAPSHOT"]
+                 [incanter "1.3.0-SNAPSHOT" 
+                  :exclusions 
+                  [swank-clojure swingrepl
+                   incanter/incanter-excel 
+                   incanter/incanter-latex 
+                   incanter/incanter-pdf 
+                   incanter/incanter-mongodb 
+                   incanter/incanter-processing
+                   jline]]])

@@ -1,7 +1,7 @@
 (ns elatexam.logs.stats
   (:use 
     [clojure.set :as cs]
-    elatexam.logs.util
+    [org.clojars.smee.map :only (map-values)]
     [incanter.core :only ($=)])
   (:require 
     [incanter.stats :as stats]
@@ -164,7 +164,7 @@ if deleted."
   [tries]
   (let  [tr-sort (sort-by :start-time tries)
          intervals (map (fn [{s :start-time}] [s (+ s (* 90 60 1000))]) tr-sort)
-         indices (index-filter (partial apply (complement c/overlaps?)) (partition 2 1 intervals))
+         indices (keep-indexed #(when (not c/overlaps? %2 %3) %1) (partition 2 1 intervals))
          indices-fixed (concat [0] (map inc indices) [(count intervals)])
          lengths       (map (partial apply #(- %2 %1)) (partition 2 1 indices-fixed))
          groups        (loop [res (), [l & ls] lengths, tr tr-sort]

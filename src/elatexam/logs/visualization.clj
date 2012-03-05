@@ -1,11 +1,18 @@
 (ns elatexam.logs.visualization
-  (:use [incanter core charts stats]
-    [elatexam.logs.util :only (map-values map-keys s2i time-to-string time-to-date-string percent index-filter)])
+  (:use 
+    [clojure.java.io :only (file)]
+    [incanter core charts stats]
+    [org.clojars.smee 
+     [map :only (map-values)]
+     [time :only (time-to-string time-to-date-string)]
+     [util :only (s2i)]]
+    [elatexam.logs.util :only (percent index-filter)])
   (:require
-    [elatexam.logs.taskdef :as td]
-    [elatexam.logs.core :as c]
-    [elatexam.logs.xml :as xml]
-    [elatexam.logs.stats :as stats])
+    [elatexam.logs 
+     [core :as c]
+     [stats :as stats]
+     [taskdef :as td]
+     [xml :as xml]])
   (:import
     [org.jfree.data.gantt Task TaskSeries TaskSeriesCollection]
     org.jfree.data.time.SimpleTimePeriod))
@@ -269,21 +276,21 @@ a box plot of exam score distributions."
 
   
 (comment
-  (def entries (c/logs-from-dir "d:/temp/e"))
-  (def th (xml/load-xml "D:/temp/e/ExamServerRepository_bildungssystemPruef/system/taskhandling.xml"))
-  (duration-vs-points entries th)
+  (def input-dir "d:\\temp\\ExamServerRepository_bildungssystemPruef\\")
+  (def entries (c/logs-from-dir input-dir))
+  (def th (xml/load-xml (file input-dir "system" "taskhandling.xml")))
+  (duration-vs-points-chart entries th)
   (save (exam-duration-graph entries) "d:/bearbeitungszeit.png")
   (view (task-difficulty std tries "Alle Gruppen"))
   (show-task-difficulties-per-type std tries)
   
-  (def taskdef (td/load-taskdef "input/taskdefs/klausur_bergner_21.xml"))
-  (def tries (td/load-tries "input/home" "12"))
+  (def taskdef (td/load-taskdef (file input-dir "taskdefs" "klausur_bergner_21.xml")))
+  (def tries (td/load-tries (file input-dir "home") "12"))
   (def std (taskdef :subtaskdefs))
   
   
   (def groups (stats/split-by-randomseed tries))
   (stats/find-bad-cronbach std (first groups))
-  
   )
 
 (comment
